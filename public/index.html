@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Strokes Gained</title>
+<meta name="description" content="Filter this week's PGA Tour field by weighted strokes gained categories.">
+<meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f9f9f7" media="(prefers-color-scheme: light)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Strokes Gained">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<header class="app-bar">
+  <div class="brand">
+    <img src="/icons/icon-192.png" alt="" width="28" height="28">
+    <div>
+      <h1>Strokes Gained</h1>
+      <p id="event-line" class="event-line">Loading…</p>
+    </div>
+  </div>
+  <div class="app-bar-actions">
+    <button type="button" id="theme-toggle" class="icon-btn" title="Switch theme" aria-label="Switch theme">◐</button>
+    <button type="button" id="refresh-btn" class="btn">Refresh</button>
+    <button type="button" id="settings-btn" class="btn btn-primary">Settings</button>
+  </div>
+</header>
+
+<main>
+  <div id="banner" class="banner" hidden></div>
+
+  <section class="tiles" aria-label="Event summary">
+    <div class="tile">
+      <span class="tile-label">Event</span>
+      <span class="tile-value" id="tile-event">—</span>
+      <span class="tile-note" id="tile-event-note"></span>
+    </div>
+    <div class="tile">
+      <span class="tile-label">Players shown</span>
+      <span class="tile-value" id="tile-count">—</span>
+      <span class="tile-note" id="tile-count-note"></span>
+    </div>
+    <div class="tile">
+      <span class="tile-label">Top of your board</span>
+      <span class="tile-value" id="tile-leader">—</span>
+      <span class="tile-note" id="tile-leader-note"></span>
+    </div>
+    <div class="tile">
+      <span class="tile-label">Data as of</span>
+      <span class="tile-value" id="tile-updated">—</span>
+      <span class="tile-note" id="tile-updated-note"></span>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="weights-heading">
+    <div class="panel-head">
+      <h2 id="weights-heading">Weights</h2>
+      <div class="panel-head-controls">
+        <label class="field">
+          <span>Preset</span>
+          <select id="preset-select"></select>
+        </label>
+        <button type="button" id="save-preset-btn" class="btn btn-sm">Save as preset</button>
+        <button type="button" id="delete-preset-btn" class="btn btn-sm" hidden>Delete preset</button>
+        <label class="field">
+          <span>Score</span>
+          <select id="mode-select">
+            <option value="z">Field z&#8209;score</option>
+            <option value="raw">Raw strokes gained</option>
+          </select>
+        </label>
+        <button type="button" id="clear-weights-btn" class="btn btn-sm">Clear</button>
+      </div>
+    </div>
+    <p class="panel-note" id="mode-note"></p>
+    <div class="weights-grid" id="weights-grid"></div>
+  </section>
+
+  <details class="panel" id="filters-panel">
+    <summary>
+      <h2>Filters</h2>
+      <span class="chip" id="filter-count" hidden></span>
+    </summary>
+    <div class="panel-body">
+      <div class="filter-row">
+        <label class="field grow">
+          <span>Search player</span>
+          <input type="search" id="search-input" placeholder="Name or country" autocomplete="off">
+        </label>
+        <label class="check">
+          <input type="checkbox" id="require-skill"> Only players with DataGolf skill data
+        </label>
+        <label class="check">
+          <input type="checkbox" id="exclude-amateurs"> Exclude amateurs
+        </label>
+        <button type="button" id="clear-filters-btn" class="btn btn-sm">Clear filters</button>
+      </div>
+      <table class="bounds-table">
+        <caption class="sr-only">Minimum and maximum bounds per category</caption>
+        <thead>
+          <tr><th scope="col">Category</th><th scope="col">Min</th><th scope="col">Max</th><th scope="col">Field range</th></tr>
+        </thead>
+        <tbody id="bounds-body"></tbody>
+      </table>
+    </div>
+  </details>
+
+  <section class="panel table-panel" aria-labelledby="board-heading">
+    <div class="panel-head">
+      <h2 id="board-heading">Board</h2>
+      <div class="panel-head-controls">
+        <span class="legend" aria-hidden="true">
+          <span class="legend-label">below field</span>
+          <span class="legend-swatch lv--4"></span>
+          <span class="legend-swatch lv--2"></span>
+          <span class="legend-swatch lv-0"></span>
+          <span class="legend-swatch lv-2"></span>
+          <span class="legend-swatch lv-4"></span>
+          <span class="legend-label">above field</span>
+        </span>
+        <button type="button" id="export-btn" class="btn btn-sm">Export CSV</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table id="board">
+        <thead id="board-head"></thead>
+        <tbody id="board-body"></tbody>
+      </table>
+    </div>
+    <p class="empty" id="board-empty" hidden></p>
+  </section>
+
+  <footer class="app-footer">
+    <p>Data from <a href="https://datagolf.com/api-access" target="_blank" rel="noopener">DataGolf</a>. Your API key and settings stay in this browser.</p>
+  </footer>
+</main>
+
+<dialog id="settings-dialog" class="dialog">
+  <form method="dialog" class="dialog-body">
+    <h2>Settings</h2>
+
+    <label class="field">
+      <span>DataGolf API key</span>
+      <input type="password" id="api-key-input" autocomplete="off" spellcheck="false" placeholder="Paste your key">
+    </label>
+    <p class="hint">
+      Stored in this browser's localStorage in plain text, and sent only to
+      DataGolf. Find your key on the
+      <a href="https://datagolf.com/api-access" target="_blank" rel="noopener">DataGolf API page</a>.
+    </p>
+
+    <label class="field">
+      <span>Tour</span>
+      <select id="tour-select">
+        <option value="pga">PGA Tour</option>
+        <option value="euro">DP World Tour</option>
+        <option value="kft">Korn Ferry Tour</option>
+        <option value="opp">PGA Tour opposite field</option>
+        <option value="alt">Alt tours</option>
+      </select>
+    </label>
+
+    <p class="hint" id="transport-note"></p>
+
+    <div class="dialog-actions">
+      <button type="button" id="clear-cache-btn" class="btn btn-sm">Clear cached data</button>
+      <button type="button" id="reset-btn" class="btn btn-sm">Reset all settings</button>
+      <span class="spacer"></span>
+      <button value="cancel" class="btn">Close</button>
+      <button value="save" id="settings-save" class="btn btn-primary">Save &amp; load</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="preset-dialog" class="dialog">
+  <form method="dialog" class="dialog-body">
+    <h2>Save preset</h2>
+    <label class="field">
+      <span>Name</span>
+      <input type="text" id="preset-name-input" maxlength="40" placeholder="e.g. Bermuda bombers">
+    </label>
+    <div class="dialog-actions">
+      <span class="spacer"></span>
+      <button value="cancel" class="btn">Cancel</button>
+      <button value="save" class="btn btn-primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>
