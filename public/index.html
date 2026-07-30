@@ -27,6 +27,7 @@
   <div class="app-bar-actions">
     <button type="button" id="theme-toggle" class="icon-btn" title="Switch theme" aria-label="Switch theme">◐</button>
     <button type="button" id="refresh-btn" class="btn">Refresh</button>
+    <button type="button" id="diag-btn" class="btn">Diagnostics</button>
     <button type="button" id="settings-btn" class="btn btn-primary">Settings</button>
   </div>
 </header>
@@ -55,6 +56,11 @@
       <span class="tile-value" id="tile-updated">—</span>
       <span class="tile-note" id="tile-updated-note"></span>
     </div>
+    <button type="button" class="tile tile-button" id="tile-usage-btn">
+      <span class="tile-label">API requests <span class="tile-hint">open diagnostics</span></span>
+      <span class="tile-value" id="tile-usage">0</span>
+      <span class="tile-note" id="tile-usage-note"></span>
+    </button>
   </section>
 
   <section class="panel" aria-labelledby="weights-heading">
@@ -175,6 +181,54 @@
       <button value="save" id="settings-save" class="btn btn-primary">Save &amp; load</button>
     </div>
   </form>
+</dialog>
+
+<dialog id="diag-dialog" class="dialog dialog-wide">
+  <div class="dialog-body">
+    <div class="dialog-head">
+      <h2>Diagnostics</h2>
+      <button type="button" id="diag-close" class="icon-btn" aria-label="Close">✕</button>
+    </div>
+
+    <section class="diag-section">
+      <h3>API usage</h3>
+      <div class="diag-stats" id="diag-stats"></div>
+      <figure class="diag-figure">
+        <figcaption>Requests per minute, last 30 minutes</figcaption>
+        <div id="diag-spark"></div>
+      </figure>
+      <p class="hint" id="diag-limits"></p>
+    </section>
+
+    <section class="diag-section">
+      <h3>Connectivity</h3>
+      <p class="hint" id="diag-transport"></p>
+      <div class="dialog-actions">
+        <button type="button" id="diag-probe" class="btn btn-sm">Test direct connection</button>
+        <span class="hint">Uses one API request.</span>
+      </div>
+      <p class="hint" id="diag-probe-result"></p>
+    </section>
+
+    <section class="diag-section">
+      <h3>Recent errors</h3>
+      <div id="diag-errors" class="diag-errors"></div>
+    </section>
+
+    <section class="diag-section">
+      <h3>Report</h3>
+      <p class="hint">Everything above plus the request log and the exact shape of each feed. Your API key is never included.</p>
+      <textarea id="diag-report" readonly rows="12" spellcheck="false" aria-label="Debug report"></textarea>
+      <div class="dialog-actions">
+        <button type="button" id="diag-copy" class="btn btn-primary btn-sm">Copy report</button>
+        <button type="button" id="diag-download" class="btn btn-sm">Download .md</button>
+        <button type="button" id="diag-clear" class="btn btn-sm">Clear log</button>
+        <span class="spacer"></span>
+        <button type="button" id="diag-dismiss" class="btn">Close</button>
+      </div>
+      <p class="hint" id="diag-copy-result" role="status"></p>
+    </section>
+  </div>
 </dialog>
 
 <dialog id="preset-dialog" class="dialog">

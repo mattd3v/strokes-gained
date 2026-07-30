@@ -2,7 +2,7 @@
 // caches feed payloads itself in localStorage so it can open offline with the
 // last board you looked at.
 
-const VERSION = 'sg-v1';
+const VERSION = 'sg-v2';
 const SHELL = [
   '/',
   '/index.html',
@@ -15,6 +15,7 @@ const SHELL = [
   '/js/store.js',
   '/js/presets.js',
   '/js/ui.js',
+  '/js/diagnostics.js',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/maskable-512.png',

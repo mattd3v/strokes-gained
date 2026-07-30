@@ -29,6 +29,17 @@ const ALLOWED = new Set([
   '/preds/live-tournament-stats',
 ]);
 
+// Passed straight through to the browser so the app can show live quota use.
+// A page calling DataGolf directly cannot read these unless DataGolf sets
+// Access-Control-Expose-Headers, so forwarding them is one concrete thing the
+// proxy buys you.
+const RATE_LIMIT_HEADERS = [
+  'x-ratelimit-limit', 'x-ratelimit-remaining', 'x-ratelimit-reset', 'x-ratelimit-used',
+  'ratelimit-limit', 'ratelimit-remaining', 'ratelimit-reset', 'ratelimit-policy',
+  'x-rate-limit-limit', 'x-rate-limit-remaining', 'x-rate-limit-reset',
+  'x-requests-remaining', 'x-quota-remaining', 'retry-after',
+];
+
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -105,8 +116,24 @@ async function proxy(req, res, url) {
     });
     const text = await upstream.text();
     const type = upstream.headers.get('content-type') || 'text/plain; charset=utf-8';
-    console.log(`  ${upstream.status} ${upstreamPath}`);
-    send(res, upstream.status, text, { 'content-type': type });
+
+    const forwarded = {};
+    for (const name of RATE_LIMIT_HEADERS) {
+      const value = upstream.headers.get(name);
+      if (value != null && value !== '') forwarded[name] = value;
+    }
+
+    const seen = Object.keys(forwarded);
+    console.log(`  ${upstream.status} ${upstreamPath}${seen.length ? ` [${seen.join(', ')}]` : ''}`);
+
+    send(res, upstream.status, text, {
+      'content-type': type,
+      ...forwarded,
+      // Tells the app which rate-limit headers the upstream actually sent, so
+      // "no limits shown" can be distinguished from "limits not reported".
+      'x-sg-upstream-headers': seen.join(',') || 'none',
+      'access-control-expose-headers': [...seen, 'x-sg-upstream-headers'].join(','),
+    });
   } catch (err) {
     const reason = err.name === 'AbortError' ? 'Upstream request timed out.' : err.message;
     console.error(`  proxy error ${redact(target.toString())}: ${reason}`);

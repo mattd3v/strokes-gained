@@ -51,19 +51,31 @@ function el(tag, className, text) {
 
 /* ---------------- header, banner, tiles ---------------- */
 
-export function renderBanner(els, message, kind = 'info') {
+export function renderBanner(els, message, kind = 'info', actions = []) {
   if (!message) {
     els.banner.hidden = true;
-    els.banner.textContent = '';
+    els.banner.replaceChildren();
     return;
   }
   els.banner.hidden = false;
   els.banner.dataset.kind = kind;
   els.banner.replaceChildren();
+
   const icon = el('span', 'banner-icon', kind === 'error' ? '!' : kind === 'warning' ? '△' : 'i');
   const body = el('span', 'banner-body');
   body.textContent = message;
   els.banner.append(icon, body);
+
+  if (actions.length) {
+    const bar = el('span', 'banner-actions');
+    for (const action of actions) {
+      const button = el('button', 'btn btn-sm', action.label);
+      button.type = 'button';
+      button.addEventListener('click', action.onClick);
+      bar.append(button);
+    }
+    els.banner.append(bar);
+  }
 }
 
 export function renderEventLine(els, event) {
@@ -106,6 +118,119 @@ export function renderTiles(els, { event, visibleRows, allRows, missingSkill, lo
     : event?.lastUpdated
       ? `feed: ${event.lastUpdated}`
       : '';
+}
+
+/* ---------------- api usage ---------------- */
+
+/**
+ * Picks the clearest headline the available data supports: a server-reported
+ * remaining count if DataGolf sends one, otherwise our own count of requests
+ * made today.
+ */
+export function renderUsage(els, stats, rateLimit) {
+  const remaining = rateLimit && (
+    rateLimit['x-ratelimit-remaining']
+    ?? rateLimit['ratelimit-remaining']
+    ?? rateLimit['x-rate-limit-remaining']
+    ?? rateLimit['x-requests-remaining']
+    ?? rateLimit['x-quota-remaining']
+  );
+
+  if (remaining != null) {
+    const limit = rateLimit['x-ratelimit-limit'] ?? rateLimit['ratelimit-limit'] ?? rateLimit['x-rate-limit-limit'];
+    els.tileUsage.textContent = limit != null ? `${remaining} / ${limit}` : `${remaining} left`;
+    els.tileUsageNote.textContent = `${stats.today} sent today · ${stats.lastHour}/hr · ${stats.lastMinute}/min`;
+    return;
+  }
+
+  els.tileUsage.textContent = `${stats.today} today`;
+  const bits = [`${stats.lastHour}/hr`, `${stats.lastMinute}/min`];
+  if (stats.cacheHits) bits.push(`${stats.cacheHits} from cache`);
+  if (stats.errors) bits.push(`${stats.errors} failed`);
+  els.tileUsageNote.textContent = bits.join(' · ');
+}
+
+/**
+ * Bar chart of requests per minute. One series, so no legend; the value is in
+ * each bar's tooltip and the peak is labelled.
+ */
+export function renderSparkline(container, values) {
+  const width = 100;
+  const height = 34;
+  const max = Math.max(1, ...values);
+  const slot = width / values.length;
+  const barW = Math.max(0.8, slot - 0.6);
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  svg.setAttribute('preserveAspectRatio', 'none');
+  svg.setAttribute('class', 'spark');
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label',
+    `Requests per minute over the last ${values.length} minutes. Peak ${max}, total ${values.reduce((a, b) => a + b, 0)}.`);
+
+  values.forEach((value, i) => {
+    // Idle minutes keep a stub so all 30 slots read as a timeline.
+    const h = value === 0 ? 0.8 : Math.max(1.5, (value / max) * (height - 2));
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', String(i * slot));
+    rect.setAttribute('y', String(height - h));
+    rect.setAttribute('width', String(barW));
+    rect.setAttribute('height', String(h));
+    rect.setAttribute('rx', '0.6');
+    rect.setAttribute('class', value === 0 ? 'spark-bar spark-bar-empty' : 'spark-bar');
+    const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+    const minutesAgo = values.length - 1 - i;
+    title.textContent = `${value} request${value === 1 ? '' : 's'} · ${minutesAgo === 0 ? 'this minute' : `${minutesAgo} min ago`}`;
+    rect.append(title);
+    svg.append(rect);
+  });
+
+  const axis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  axis.setAttribute('x1', '0');
+  axis.setAttribute('x2', String(width));
+  axis.setAttribute('y1', String(height - 0.25));
+  axis.setAttribute('y2', String(height - 0.25));
+  axis.setAttribute('class', 'spark-axis');
+  svg.append(axis);
+
+  container.replaceChildren(svg, el('span', 'spark-peak', `peak ${max}/min`));
+}
+
+export function renderDiagStats(container, stats) {
+  const cells = [
+    ['Today', stats.today],
+    ['Last hour', stats.lastHour],
+    ['Last minute', stats.lastMinute],
+    ['Logged total', stats.total],
+    ['From cache', stats.cacheHits],
+    ['Failed', stats.errors],
+  ];
+  container.replaceChildren(...cells.map(([label, value]) => {
+    const box = el('div', 'diag-stat');
+    box.append(el('span', 'diag-stat-value', String(value)));
+    box.append(el('span', 'diag-stat-label', label));
+    if (label === 'Failed' && value > 0) box.classList.add('is-bad');
+    return box;
+  }));
+}
+
+export function renderDiagErrors(container, errors) {
+  if (!errors.length) {
+    container.replaceChildren(el('p', 'hint', 'No failed requests logged.'));
+    return;
+  }
+  container.replaceChildren(...errors.map((e) => {
+    const box = el('div', 'diag-error');
+    const head = el('div', 'diag-error-head');
+    head.append(el('code', null, e.endpoint || 'unknown'));
+    head.append(el('span', 'diag-error-meta',
+      `${e.status ?? 'no response'} · ${new Date(e.ts).toLocaleTimeString()} · via ${e.transport || '—'}`));
+    box.append(head);
+    box.append(el('p', 'diag-error-msg', e.error || 'Unknown error'));
+    if (e.bodySnippet) box.append(el('pre', 'diag-error-body', e.bodySnippet));
+    return box;
+  }));
 }
 
 /* ---------------- weights ---------------- */

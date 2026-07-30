@@ -113,17 +113,95 @@ fraction or percentage points depending on the feed, and pre-tournament
 probabilities arrive as decimals. Both are detected from the data and
 normalised, so the columns read as `-3.1` and `4.2%` either way.
 
-## Why there is a local server
+## Watching your API usage
 
-`server.mjs` does two things: serves `public/`, and proxies `/dg/*` to
-`https://feeds.datagolf.com/*`. The proxy exists because DataGolf's feeds are
-not guaranteed to send CORS headers, so a browser calling them directly from a
-page may be blocked.
+The **API requests** tile is live. It counts every request the app makes,
+persists the log across reloads, and shows today's total alongside the rate for
+the last hour and the last minute. Click it for the full diagnostics panel: a
+per-minute bar chart of the last half hour, the recent error list, and the
+report.
 
-It binds to loopback only, allows a fixed list of upstream paths, and never
-logs your key. The app probes for it at startup and falls back to calling
-DataGolf directly if you are serving `public/` some other way — that path works
-only if your browser permits the cross-origin request.
+If DataGolf sends rate-limit headers, the tile switches to showing the real
+remaining quota instead (`4987 / 5000`). Whether that happens is up to
+DataGolf — the app looks for the usual `X-RateLimit-*` and `RateLimit-*` names
+and also scans response bodies for quota-shaped fields. When nothing is
+reported, the panel says so explicitly rather than showing a blank, so you can
+tell "no quota reported" from "quota hidden from us".
+
+A load costs up to four requests, one per feed. Cached responses are counted
+separately and do not touch your quota — that is what *From cache* means.
+
+## When something breaks
+
+Errors appear in a banner at the top with two buttons: **Copy error** puts the
+message plus a full debug report on your clipboard, and **Diagnostics** opens
+the panel.
+
+The report is markdown, and it is designed to be pasted straight back to me.
+It contains the app version and transport, browser and origin, your weight and
+filter settings, the request log with timings and status codes, every recent
+error with its response body, **the exact shape of each DataGolf feed**, and a
+per-category count of how many players had data. That last pair is what makes a
+schema change diagnosable without me being able to call the API myself.
+
+The app also watches for silent breakage — feeds that parse but produce nothing
+usable, such as no player carrying a `dg_id`, no field player matching a skill
+row, or a category that came back empty across the board. Each raises a
+specific warning instead of leaving you with a blank table.
+
+**Your API key never appears in any of it.** It is stripped from the report,
+from the on-screen error banner, and from the stored log — both by matching the
+key itself and by matching any `key=` parameter, since DataGolf echoes the
+request URL back in some errors. There are unit tests asserting this.
+
+## Can this run without the local server?
+
+Short answer: only if DataGolf sends CORS headers, and the app can now tell you
+whether it does. Open **Diagnostics → Test direct connection**.
+
+The long answer is that this is not a design choice. A browser will not let a
+page read a cross-origin response unless the server opts in with
+`Access-Control-Allow-Origin`. If DataGolf sends it, `public/` is a plain static
+folder and any static file server will do:
+
+```bash
+npx http-server public -p 5173      # or python3 -m http.server
+```
+
+The app detects that the proxy is absent and calls DataGolf directly. If
+DataGolf does not send that header, no amount of client-side code can work
+around it — that is the whole point of the same-origin policy.
+
+Two things you give up in direct mode even when it works:
+
+- **Rate-limit headers become invisible.** A page can only read response headers
+  the server names in `Access-Control-Expose-Headers`. The local proxy reads
+  them server-side and forwards them, which is why the live quota readout is
+  more informative through the proxy.
+- **A failed request is ambiguous.** `fetch` rejects identically for a CORS
+  block and a dead network, so the app cannot tell you which without the probe.
+
+Some things that look like alternatives but are not:
+
+- **Opening `index.html` from `file://`** does not work. Browsers refuse to load
+  ES modules over `file://`, service workers are unavailable there so it could
+  not be a PWA, and the origin is `null`, which almost no API accepts.
+- **A public CORS proxy** (`corsproxy.io` and friends) would work, and you
+  should not use one. It means handing your API key to a stranger's server on
+  every request. That is the one option here that is genuinely unsafe, which is
+  why the local proxy allowlists its upstream paths and binds to loopback.
+- **`mode: 'no-cors'`** returns an opaque response your code cannot read.
+
+So: yes, if DataGolf cooperates, and the probe will tell you in one click.
+Otherwise something on your machine has to make the request, and 150 lines of
+dependency-free Node is the smallest honest version of that.
+
+### What the local server does
+
+`server.mjs` serves `public/` and proxies `/dg/*` to
+`https://feeds.datagolf.com/*`. It binds to loopback only, allows a fixed list
+of upstream paths, forwards rate-limit headers back to the page, and never logs
+your key.
 
 ## Layout
 
@@ -139,6 +217,7 @@ public/
     api.js              DataGolf client, caching, transport detection
     model.js            joins the feeds into table rows
     scoring.js          field statistics and the weighted score — all pure
+    diagnostics.js      request log, usage stats, redaction, debug report
     ui.js               rendering
     presets.js          built-in weight sets
     store.js            settings persistence
@@ -154,8 +233,12 @@ wiring.
 - The scoring logic is covered by tests against fixtures, and the UI has been
   driven end to end in a browser against stubbed feeds, but the DataGolf
   endpoints have not been exercised with a live key — network access to
-  `feeds.datagolf.com` was blocked in the environment this was written in. If a
-  field name differs from what the code expects, `model.js` is where to look.
+  `feeds.datagolf.com` was blocked in the environment this was written in. That
+  is what the diagnostics report is for: if anything looks wrong, send it and
+  the feed shapes in it should pin down the cause.
+- Whether DataGolf reports rate limits at all is unknown for the same reason.
+  The app handles the common header conventions and says plainly when it sees
+  none.
 - Skill ratings are DataGolf's global, all-conditions estimates. There is no
   course-fit or recent-form adjustment yet; `/preds/skill-decompositions` and
   `/preds/player-decompositions` would be the way to add one.

@@ -1,8 +1,9 @@
 // Wiring: load settings, fetch feeds, recompute, render.
 
-import { loadAll, clearCache, detectTransport, DataGolfError } from './api.js';
+import { loadAll, clearCache, detectTransport, probeDirect, DataGolfError } from './api.js';
 import { buildRows } from './model.js';
-import { compositeScore, passesBounds, weightsAreEmpty } from './scoring.js';
+import { CATEGORIES, compositeScore, passesBounds, weightsAreEmpty } from './scoring.js';
+import * as diagnostics from './diagnostics.js';
 import { BUILT_IN_PRESETS, findPreset, weightsEqual, emptyWeights } from './presets.js';
 import { defaultSettings, loadSettings, saveSettings, resetSettings, loadApiKey, saveApiKey } from './store.js';
 import * as ui from './ui.js';
@@ -17,6 +18,10 @@ const IDS = [
   'board-head', 'board-body', 'board-empty', 'export-btn', 'refresh-btn', 'settings-btn',
   'theme-toggle', 'settings-dialog', 'api-key-input', 'tour-select', 'transport-note',
   'clear-cache-btn', 'reset-btn', 'preset-dialog', 'preset-name-input',
+  'tile-usage', 'tile-usage-note', 'tile-usage-btn', 'diag-btn', 'diag-dialog', 'diag-close',
+  'diag-dismiss', 'diag-stats', 'diag-spark', 'diag-limits', 'diag-transport', 'diag-probe',
+  'diag-probe-result', 'diag-errors', 'diag-report', 'diag-copy', 'diag-download',
+  'diag-clear', 'diag-copy-result',
 ];
 
 function camel(id) {
@@ -36,6 +41,7 @@ const state = {
   loading: false,
   visible: [],
   columns: [],
+  transport: null,
 };
 
 /* ---------------- data ---------------- */
@@ -59,6 +65,8 @@ async function load({ force = false, quiet = false } = {}) {
       force,
     });
 
+    recordFeedShapes(results);
+
     state.data = buildRows({
       field: results.field?.data,
       skills: results.skills?.data,
@@ -75,19 +83,159 @@ async function load({ force = false, quiet = false } = {}) {
     if (errors.schedule) notes.push('Schedule details unavailable.');
     if (!state.data.rows.length) {
       notes.push('DataGolf returned an empty field for this tour. The next event\'s field is usually published early in tournament week.');
+    } else {
+      notes.push(...schemaWarnings(state.data));
     }
-    ui.renderBanner(els, notes.join(' '), state.stale ? 'warning' : 'info');
+
+    const kind = state.stale || notes.length ? 'warning' : 'info';
+    ui.renderBanner(els, notes.join(' '), kind, notes.length ? [
+      { label: 'Diagnostics', onClick: openDiagnostics },
+    ] : []);
   } catch (err) {
     const message = err instanceof DataGolfError
       ? err.message
       : `Unexpected error while loading: ${err.message}`;
-    ui.renderBanner(els, message, 'error');
+    ui.renderBanner(els, message, 'error', [
+      {
+        label: 'Copy error',
+        onClick: async (event) => {
+          const ok = await copyText(errorReport(message));
+          event.currentTarget.textContent = ok ? 'Copied' : 'Copy blocked — use Diagnostics';
+        },
+      },
+      { label: 'Diagnostics', onClick: openDiagnostics },
+    ]);
   } finally {
     state.loading = false;
     els.refreshBtn.disabled = false;
     els.refreshBtn.textContent = 'Refresh';
     render();
   }
+}
+
+/* ---------------- diagnostics ---------------- */
+
+function recordFeedShapes(results) {
+  const shapes = {};
+  for (const [name, result] of Object.entries(results)) {
+    shapes[name] = result?.data ? diagnostics.describeShape(result.data) : 'not loaded';
+  }
+  diagnostics.setFeedShapes(shapes);
+}
+
+/**
+ * Catches the failure mode a schema change would cause: feeds that parse fine
+ * but produce a board with nothing in it. Without this the app would just look
+ * empty, with nothing to report.
+ */
+function schemaWarnings(data) {
+  if (!data.rows.length) return [];
+
+  if (data.rows.every((r) => r.dgId == null)) {
+    return ['No player in the field feed carried a dg_id, so nothing could be joined to the skill ratings. That points at a change in DataGolf\'s response format — please send me the diagnostics report.'];
+  }
+  if (data.rows.every((r) => !r.hasSkill)) {
+    return ['Not one player in the field matched a skill-ratings row, so every category is empty. Either the skill feed came back empty or its player ids no longer line up — please send me the diagnostics report.'];
+  }
+
+  const empty = CATEGORIES.filter((c) => (data.summaries[c.key]?.n || 0) === 0).map((c) => c.label);
+  if (empty.length) {
+    return [`No values came back for ${empty.join(', ')}. The other categories loaded, so these fields may have been renamed — the diagnostics report records the exact feed shape.`];
+  }
+  return [];
+}
+
+function dataSummary() {
+  if (!state.data) return null;
+  const { event, summaries, missingSkill } = state.data;
+  return {
+    event: event.name,
+    fieldSize: event.fieldSize,
+    missingSkill,
+    oddsModel: event.oddsModel,
+    coverage: CATEGORIES.map((c) => {
+      const s = summaries[c.key] || {};
+      const show = (v) => (typeof v === 'number' ? v.toFixed(c.decimals) : '—');
+      return [c.label, s.n ?? 0, show(s.min), show(s.max)];
+    }),
+  };
+}
+
+function buildDebugReport() {
+  return diagnostics.buildReport({
+    settings: state.settings,
+    transport: state.transport || 'unknown',
+    dataSummary: dataSummary(),
+    secrets: [state.apiKey],
+  });
+}
+
+function errorReport(message) {
+  return `Strokes Gained error: ${message}\n\n${buildDebugReport()}`;
+}
+
+async function copyText(text, statusEl) {
+  let ok = false;
+  try {
+    await navigator.clipboard.writeText(text);
+    ok = true;
+  } catch {
+    ok = false;
+  }
+  if (statusEl) {
+    statusEl.textContent = ok
+      ? 'Copied to the clipboard.'
+      : 'The browser blocked clipboard access — select the text in the report box and copy it manually.';
+  }
+  return ok;
+}
+
+/** The last request that told us anything about DataGolf's own headers. */
+function lastUpstreamHeaderReport() {
+  const entries = diagnostics.getEntries();
+  for (let i = entries.length - 1; i >= 0; i -= 1) {
+    if (entries[i].upstreamHeaders) return entries[i].upstreamHeaders;
+  }
+  return null;
+}
+
+function renderUsageTile() {
+  ui.renderUsage(els, diagnostics.stats(), diagnostics.latestRateLimit());
+}
+
+function renderDiagnostics() {
+  const stats = diagnostics.stats();
+  ui.renderDiagStats(els.diagStats, stats);
+  ui.renderSparkline(els.diagSpark, diagnostics.buckets(30));
+  ui.renderDiagErrors(els.diagErrors, diagnostics.recentErrors(5));
+
+  const rl = diagnostics.latestRateLimit();
+  const upstream = lastUpstreamHeaderReport();
+  if (rl) {
+    const pairs = Object.entries(rl)
+      .filter(([k]) => k !== 'ts' && k !== 'endpoint')
+      .map(([k, v]) => `${k}: ${v}`);
+    els.diagLimits.textContent = `DataGolf reported — ${pairs.join(' · ')}`;
+  } else if (upstream === 'none') {
+    els.diagLimits.textContent = 'DataGolf sent no rate-limit headers on the last request, so there is no server-side quota to show. The counts above are this app\'s own tally of requests it made.';
+  } else if (state.transport === 'direct') {
+    els.diagLimits.textContent = 'Running without the local proxy, so the browser hides response headers unless DataGolf opts in with Access-Control-Expose-Headers. Any quota DataGolf reports is unreadable from here — the counts above are this app\'s own tally.';
+  } else {
+    els.diagLimits.textContent = 'No rate-limit headers seen yet. Load some data and check back.';
+  }
+
+  els.diagTransport.textContent = state.transport === 'proxy'
+    ? 'Requests go through the local proxy at /dg on this machine, which forwards any rate-limit headers DataGolf sends. Your key never leaves your computer except in the request to DataGolf.'
+    : 'No local proxy detected, so this page calls feeds.datagolf.com directly. That works only if DataGolf permits the cross-origin request, and response headers stay hidden from the page either way. Run `npm start` and open the app from there to use the proxy.';
+
+  els.diagReport.value = buildDebugReport();
+}
+
+function openDiagnostics() {
+  els.diagProbeResult.textContent = '';
+  els.diagCopyResult.textContent = '';
+  renderDiagnostics();
+  if (!els.diagDialog.open) els.diagDialog.showModal();
 }
 
 /* ---------------- compute ---------------- */
@@ -350,10 +498,56 @@ function wire() {
     applyTheme();
   });
 
+  els.diagBtn.addEventListener('click', openDiagnostics);
+  els.tileUsageBtn.addEventListener('click', openDiagnostics);
+  els.diagClose.addEventListener('click', () => els.diagDialog.close());
+  els.diagDismiss.addEventListener('click', () => els.diagDialog.close());
+
+  els.diagCopy.addEventListener('click', () => {
+    els.diagReport.value = buildDebugReport();
+    copyText(els.diagReport.value, els.diagCopyResult);
+  });
+
+  els.diagDownload.addEventListener('click', () => {
+    const blob = new Blob([buildDebugReport()], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `strokes-gained-debug-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+    els.diagCopyResult.textContent = 'Report downloaded.';
+  });
+
+  els.diagClear.addEventListener('click', () => {
+    diagnostics.clearLog();
+    renderDiagnostics();
+    els.diagCopyResult.textContent = 'Request log cleared.';
+  });
+
+  els.diagProbe.addEventListener('click', async () => {
+    els.diagProbe.disabled = true;
+    els.diagProbeResult.textContent = 'Testing…';
+    try {
+      const result = await probeDirect(state.apiKey);
+      const verdicts = {
+        'cors-allowed': 'Direct access works.',
+        'blocked': 'Direct access is blocked.',
+        'http-error': 'Direct access reached DataGolf.',
+        'no-key': 'No key set.',
+      };
+      els.diagProbeResult.textContent = `${verdicts[result.verdict] || ''} ${result.message}`;
+    } finally {
+      els.diagProbe.disabled = false;
+      renderDiagnostics();
+    }
+  });
+
   els.settingsBtn.addEventListener('click', async () => {
     els.apiKeyInput.value = state.apiKey;
     els.tourSelect.value = state.settings.tour;
     const transport = await detectTransport();
+    state.transport = transport;
     els.transportNote.textContent = transport === 'proxy'
       ? 'Requests go through the local proxy on this machine.'
       : 'No local proxy detected — requests go straight to DataGolf from the browser, which the browser may block. Run `npm start` and open the app from that server.';
@@ -400,6 +594,20 @@ if (!findPreset(state.settings.presetId, state.settings.customPresets) && state.
 applyTheme();
 wire();
 render();
+renderUsageTile();
+
+// The usage readout is live: it updates whenever a request is logged, and on a
+// timer so the per-minute and per-hour figures visibly decay.
+diagnostics.subscribe(() => {
+  renderUsageTile();
+  if (els.diagDialog.open) renderDiagnostics();
+});
+setInterval(() => {
+  renderUsageTile();
+  if (els.diagDialog.open) renderDiagnostics();
+}, 15_000);
+
+detectTransport().then((transport) => { state.transport = transport; });
 load();
 
 if ('serviceWorker' in navigator) {

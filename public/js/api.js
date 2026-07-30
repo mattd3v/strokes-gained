@@ -4,7 +4,9 @@
 // being served some other way, falls back to calling feeds.datagolf.com
 // directly, which works only if DataGolf allows the cross-origin request.
 
-const DIRECT_BASE = 'https://feeds.datagolf.com';
+import * as diagnostics from './diagnostics.js';
+
+export const DIRECT_BASE = 'https://feeds.datagolf.com';
 const PROXY_BASE = '/dg';
 const CACHE_PREFIX = 'sg.cache.v1.';
 
@@ -80,13 +82,16 @@ export function clearCache() {
  * DataGolf answers some errors with a plain-text body and a 200 status, so
  * the body has to be sniffed rather than trusting the status code.
  */
-function parseBody(text, endpoint, status) {
+export function parseBody(text, endpoint, status, secrets = []) {
   const trimmed = text.trim();
   if (!trimmed) {
     throw new DataGolfError('DataGolf returned an empty response.', { status, endpoint });
   }
   if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
-    const message = trimmed.slice(0, 300);
+    // DataGolf echoes the request — key included — back in some error bodies,
+    // and this message goes on screen, so it has to be redacted here rather
+    // than only in the debug report.
+    const message = diagnostics.redact(trimmed.slice(0, 300), secrets);
     throw new DataGolfError(
       /key/i.test(message)
         ? `DataGolf rejected the request: ${message}`
@@ -101,7 +106,7 @@ function parseBody(text, endpoint, status) {
     throw new DataGolfError('Could not parse the DataGolf response as JSON.', { status, endpoint });
   }
   if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.error) {
-    throw new DataGolfError(String(parsed.error), { status, endpoint });
+    throw new DataGolfError(diagnostics.redact(String(parsed.error), secrets), { status, endpoint });
   }
   return parsed;
 }
@@ -114,6 +119,7 @@ function parseBody(text, endpoint, status) {
 export async function fetchEndpoint(endpoint, params, { apiKey, force = false, maxAgeMs = 0 } = {}) {
   const cached = readCache(endpoint, params);
   if (!force && cached && maxAgeMs > 0 && Date.now() - cached.ts < maxAgeMs) {
+    diagnostics.record({ endpoint, network: false, ok: true, fromCache: true });
     return { data: cached.data, ts: cached.ts, stale: false, fromCache: true };
   }
   if (!apiKey) {
@@ -129,26 +135,138 @@ export async function fetchEndpoint(endpoint, params, { apiKey, force = false, m
   }
   url.searchParams.set('key', apiKey);
 
+  const started = Date.now();
+  const fail = (message, extra = {}) => {
+    diagnostics.record({
+      endpoint,
+      transport,
+      ok: false,
+      durationMs: Date.now() - started,
+      error: diagnostics.redact(message, [apiKey]),
+      ...extra,
+    });
+  };
+
   let res;
   try {
     res = await fetch(url, { cache: 'no-store' });
   } catch (err) {
-    if (cached) return { data: cached.data, ts: cached.ts, stale: true, fromCache: true };
+    // fetch rejects identically for a CORS block and a dead network, so the
+    // message has to name both possibilities rather than guess.
     const hint = transport === 'direct'
-      ? ' The page is not being served by the bundled local server, so the request went straight to DataGolf and was probably blocked by the browser. Run `npm start` and open the app from there.'
-      : '';
+      ? ' The page is not served by the bundled local server, so this went straight to DataGolf. Either the network is down or DataGolf refused the cross-origin request. Diagnostics → Test connectivity will tell you which.'
+      : ' The local proxy could not be reached.';
+    fail(`${err.name}: ${err.message}.${hint}`);
+    if (cached) return { data: cached.data, ts: cached.ts, stale: true, fromCache: true };
     throw new DataGolfError(`Network request failed.${hint}`, { endpoint });
   }
 
   const text = await res.text();
+  const rateLimit = diagnostics.parseRateLimit(res.headers);
+  const base_ = {
+    endpoint,
+    transport,
+    status: res.status,
+    durationMs: Date.now() - started,
+    bytes: text.length,
+    rateLimit,
+    // Set by the local proxy: which rate-limit headers DataGolf actually sent.
+    // Distinguishes "DataGolf reports no quota" from "we could not read it".
+    upstreamHeaders: res.headers.get('x-sg-upstream-headers') || undefined,
+  };
+
   if (!res.ok && !text.trim().startsWith('{')) {
+    diagnostics.record({
+      ...base_,
+      ok: false,
+      error: `HTTP ${res.status}`,
+      bodySnippet: diagnostics.redact(text.slice(0, 500), [apiKey]),
+    });
     if (cached) return { data: cached.data, ts: cached.ts, stale: true, fromCache: true };
     throw new DataGolfError(`DataGolf returned HTTP ${res.status}.`, { status: res.status, endpoint });
   }
 
-  const data = parseBody(text, endpoint, res.status);
+  let data;
+  try {
+    data = parseBody(text, endpoint, res.status, [apiKey]);
+  } catch (err) {
+    diagnostics.record({
+      ...base_,
+      ok: false,
+      error: diagnostics.redact(err.message, [apiKey]),
+      bodySnippet: diagnostics.redact(text.slice(0, 500), [apiKey]),
+    });
+    throw err;
+  }
+
+  const quota = diagnostics.scanBodyForQuota(data);
+  diagnostics.record({
+    ...base_,
+    ok: true,
+    rateLimit: { ...rateLimit, ...quota },
+  });
+
   writeCache(endpoint, params, data);
   return { data, ts: Date.now(), stale: false, fromCache: false };
+}
+
+/**
+ * Attempts one direct, cross-origin request to DataGolf and reports what the
+ * browser did with it. This is the only way to find out whether the app can
+ * run without the local proxy — it depends on headers DataGolf chooses to
+ * send, which cannot be known ahead of time.
+ *
+ * Costs one API request.
+ */
+export async function probeDirect(apiKey) {
+  if (!apiKey) return { ok: false, verdict: 'no-key', message: 'Set an API key first.' };
+
+  const url = new URL(`${DIRECT_BASE}/get-schedule`);
+  url.searchParams.set('tour', 'pga');
+  url.searchParams.set('file_format', 'json');
+  url.searchParams.set('key', apiKey);
+
+  const started = Date.now();
+  try {
+    const res = await fetch(url, { cache: 'no-store' });
+    const text = await res.text();
+    const rateLimit = diagnostics.parseRateLimit(res.headers);
+    const readable = [...res.headers.keys()];
+
+    diagnostics.record({
+      endpoint: '/get-schedule (direct probe)',
+      transport: 'direct',
+      status: res.status,
+      ok: res.ok,
+      durationMs: Date.now() - started,
+      bytes: text.length,
+      rateLimit,
+    });
+
+    return {
+      ok: res.ok,
+      verdict: res.ok ? 'cors-allowed' : 'http-error',
+      status: res.status,
+      readableHeaders: readable,
+      rateLimit,
+      message: res.ok
+        ? 'DataGolf allowed the cross-origin request. This app can run as a plain static page with no proxy.'
+        : `The request went through but DataGolf answered HTTP ${res.status}.`,
+    };
+  } catch (err) {
+    diagnostics.record({
+      endpoint: '/get-schedule (direct probe)',
+      transport: 'direct',
+      ok: false,
+      durationMs: Date.now() - started,
+      error: `${err.name}: ${err.message}`,
+    });
+    return {
+      ok: false,
+      verdict: 'blocked',
+      message: `The browser refused the direct request (${err.name}: ${err.message}). That is either a CORS block or no network. If the rest of the app works through the local proxy, it is CORS, and the proxy is required.`,
+    };
+  }
 }
 
 export const endpoints = {
