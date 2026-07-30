@@ -7,8 +7,16 @@
 import * as diagnostics from './diagnostics.js';
 
 export const DIRECT_BASE = 'https://feeds.datagolf.com';
-const PROXY_BASE = '/dg';
 const CACHE_PREFIX = 'sg.cache.v1.';
+
+/**
+ * The proxy lives alongside the page, not at the domain root, so its URL is
+ * resolved against the document base. That keeps the app working when it is
+ * served from a subpath rather than `/`.
+ */
+function proxyUrl(path) {
+  return new URL(`dg${path}`, document.baseURI);
+}
 
 let transportPromise = null;
 
@@ -17,7 +25,7 @@ export function detectTransport() {
   if (transportPromise) return transportPromise;
   transportPromise = (async () => {
     try {
-      const res = await fetch(`${PROXY_BASE}/__health`, { cache: 'no-store' });
+      const res = await fetch(proxyUrl('/__health'), { cache: 'no-store' });
       if (res.ok) {
         const body = await res.json();
         if (body && body.ok) return 'proxy';
@@ -128,8 +136,7 @@ export async function fetchEndpoint(endpoint, params, { apiKey, force = false, m
   }
 
   const transport = await detectTransport();
-  const base = transport === 'proxy' ? PROXY_BASE : DIRECT_BASE;
-  const url = new URL(base + endpoint, location.origin);
+  const url = transport === 'proxy' ? proxyUrl(endpoint) : new URL(DIRECT_BASE + endpoint);
   for (const [k, v] of Object.entries({ file_format: 'json', ...params })) {
     if (v != null && v !== '') url.searchParams.set(k, String(v));
   }

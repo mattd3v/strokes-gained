@@ -9,6 +9,7 @@
   },
   "scripts": {
     "start": "node server.mjs",
+    "start:lan": "HOST=0.0.0.0 node server.mjs",
     "test": "node --test \"test/**/*.test.mjs\"",
     "icons": "node tools/make-icons.mjs"
   }

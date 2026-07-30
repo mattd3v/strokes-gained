@@ -4,22 +4,22 @@
 
 const VERSION = 'sg-v2';
 const SHELL = [
-  '/',
-  '/index.html',
-  '/styles.css',
-  '/manifest.webmanifest',
-  '/js/app.js',
-  '/js/api.js',
-  '/js/model.js',
-  '/js/scoring.js',
-  '/js/store.js',
-  '/js/presets.js',
-  '/js/ui.js',
-  '/js/diagnostics.js',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
-  '/icons/maskable-512.png',
-  '/icons/apple-touch-icon.png',
+  './',
+  './index.html',
+  './styles.css',
+  './manifest.webmanifest',
+  './js/app.js',
+  './js/api.js',
+  './js/model.js',
+  './js/scoring.js',
+  './js/store.js',
+  './js/presets.js',
+  './js/ui.js',
+  './js/diagnostics.js',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/maskable-512.png',
+  './icons/apple-touch-icon.png',
 ];
 
 self.addEventListener('install', (event) => {
@@ -44,7 +44,10 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
-  if (url.pathname === '/dg' || url.pathname.startsWith('/dg/')) return;
+
+  // The proxy sits next to the shell, so its prefix depends on the SW scope.
+  const scope = new URL('./', self.location).pathname;
+  if (url.pathname === `${scope}dg` || url.pathname.startsWith(`${scope}dg/`)) return;
 
   // Stale-while-revalidate: shell loads instantly, updates land next visit.
   event.respondWith(
@@ -63,7 +66,7 @@ self.addEventListener('fetch', (event) => {
       const fresh = await network;
       if (fresh) return fresh;
       if (request.mode === 'navigate') {
-        const shell = await cache.match('/index.html');
+        const shell = await cache.match('./index.html');
         if (shell) return shell;
       }
       return new Response('Offline and not cached.', {

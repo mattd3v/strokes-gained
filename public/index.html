@@ -9,16 +9,16 @@
 <meta name="theme-color" content="#f9f9f7" media="(prefers-color-scheme: light)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Strokes Gained">
-<link rel="manifest" href="/manifest.webmanifest">
-<link rel="icon" href="/icons/icon-192.png" sizes="192x192" type="image/png">
-<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-<link rel="stylesheet" href="/styles.css">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<link rel="stylesheet" href="./styles.css">
 </head>
 <body>
 
 <header class="app-bar">
   <div class="brand">
-    <img src="/icons/icon-192.png" alt="" width="28" height="28">
+    <img src="./icons/icon-192.png" alt="" width="28" height="28">
     <div>
       <h1>Strokes Gained</h1>
       <p id="event-line" class="event-line">Loading…</p>
@@ -246,6 +246,115 @@
   </form>
 </dialog>
 
-<script type="module" src="/js/app.js"></script>
+<noscript>
+  <p style="padding:16px;font:14px system-ui,sans-serif">
+    This app needs JavaScript. Everything runs locally in your browser — nothing is sent anywhere except your own requests to DataGolf.
+  </p>
+</noscript>
+
+<!--
+  Boot watchdog. A classic script, so it runs even when the module script is
+  blocked. If the app has not started shortly after load, it explains why
+  instead of leaving a blank or unstyled page with no clue what went wrong.
+-->
+<script>
+(function () {
+  var boot = { started: false, scriptFailed: false, error: null };
+  window.__sgBoot = boot;
+
+  window.addEventListener('error', function (e) {
+    var el = e.target;
+    if (el && el !== window && el.tagName === 'SCRIPT') boot.scriptFailed = true;
+    if (el && el !== window && el.tagName === 'LINK') boot.cssFailed = true;
+    if (!el || el === window) boot.error = e.message;
+  }, true);
+
+  window.addEventListener('unhandledrejection', function (e) {
+    if (!boot.error) boot.error = String((e.reason && e.reason.message) || e.reason);
+  });
+
+  function cssLoaded() {
+    for (var i = 0; i < document.styleSheets.length; i += 1) {
+      var sheet = document.styleSheets[i];
+      if (sheet.href && sheet.href.indexOf('styles.css') !== -1) {
+        try { return sheet.cssRules.length > 0; } catch (err) { return true; }
+      }
+    }
+    return false;
+  }
+
+  function explain(styled) {
+    if (location.protocol === 'file:') {
+      return 'This page was opened straight from a file (a file:// URL). Browsers refuse to load JavaScript modules over file://, so the app cannot start, and service workers are unavailable there too. Start the bundled server with `npm start` and open the address it prints.';
+    }
+    if (!styled) {
+      return 'The page loaded but its stylesheet and script did not, so they are probably missing at this address. Serve the whole `public/` folder, not just index.html, and make sure styles.css, js/ and icons/ sit alongside it.';
+    }
+    if (boot.scriptFailed) {
+      return 'js/app.js failed to load. If a script blocker or strict content policy is active, allow this page and reload.';
+    }
+    return 'The scripts loaded but the app did not finish starting. The error below is the best clue.';
+  }
+
+  function show() {
+    var styled = cssLoaded();
+    var box = document.createElement('div');
+    box.setAttribute('style', [
+      'position:relative', 'z-index:99999', 'margin:12px', 'padding:14px 16px',
+      'border:2px solid #d03b3b', 'border-radius:10px', 'background:#fff', 'color:#0b0b0b',
+      'font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif', 'max-width:760px',
+    ].join(';'));
+
+    var details = [
+      'Strokes Gained failed to start.',
+      '',
+      explain(styled),
+      '',
+      'Address: ' + location.href,
+      'Base URL: ' + document.baseURI,
+      'Stylesheet loaded: ' + (styled ? 'yes' : 'no'),
+      'Script failed to load: ' + (boot.scriptFailed ? 'yes' : 'no'),
+      'Error: ' + (boot.error || 'none captured'),
+      'User agent: ' + navigator.userAgent,
+    ].join('\n');
+
+    var heading = document.createElement('p');
+    heading.setAttribute('style', 'margin:0 0 8px;font-weight:600');
+    heading.textContent = 'Strokes Gained failed to start';
+
+    var body = document.createElement('p');
+    body.setAttribute('style', 'margin:0 0 10px');
+    body.textContent = explain(styled);
+
+    var pre = document.createElement('pre');
+    pre.setAttribute('style', 'margin:0;padding:8px;background:#f2f1ed;border-radius:6px;font-size:11px;white-space:pre-wrap;word-break:break-word;user-select:all');
+    pre.textContent = details;
+
+    var copy = document.createElement('button');
+    copy.setAttribute('style', 'margin-top:10px;padding:6px 12px;font:inherit;font-size:13px;border-radius:8px;border:1px solid #c3c2b7;background:#fcfcfb;cursor:pointer');
+    copy.textContent = 'Copy details';
+    copy.onclick = function () {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(details).then(
+          function () { copy.textContent = 'Copied'; },
+          function () { copy.textContent = 'Select the text above and copy'; },
+        );
+      } else {
+        copy.textContent = 'Select the text above and copy';
+      }
+    };
+
+    box.appendChild(heading);
+    box.appendChild(body);
+    box.appendChild(pre);
+    box.appendChild(copy);
+    document.body.insertBefore(box, document.body.firstChild);
+  }
+
+  setTimeout(function () { if (!boot.started) show(); }, 4000);
+})();
+</script>
+
+<script type="module" src="./js/app.js"></script>
 </body>
 </html>

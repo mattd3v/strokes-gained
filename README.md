@@ -21,6 +21,39 @@ only to DataGolf.
 To install it as an app, use your browser's install/"Add to Home Screen"
 action. Once installed it opens offline and shows the last board you loaded.
 
+### On a phone or tablet
+
+`npm start` listens on loopback, so nothing else on your network can reach it.
+To use the app from a phone, serve it on the network instead:
+
+```bash
+npm run start:lan   # prints the http://192.168.x.x:5173 address to open
+```
+
+Add that address to your home screen and it installs as a PWA there too. The
+proxy stores no key of its own, so anything else on your network that finds it
+would still need a DataGolf key to get anything out of it.
+
+Do not open `index.html` by double-clicking it. Browsers block JavaScript
+modules over `file://`, so the app cannot start — it will tell you so rather
+than showing a blank page, but a real address is the fix.
+
+### Hosting it somewhere else
+
+Every asset path is relative, so `public/` can be served from a subfolder
+(a GitHub Pages project site, say) as well as from a domain root. Without the
+local proxy the app calls DataGolf directly, which works only if DataGolf
+allows the cross-origin request — see [Can this run without the local
+server?](#can-this-run-without-the-local-server) below.
+
+### When the page comes up blank or unstyled
+
+A small watchdog runs before the app does. If startup has not completed a few
+seconds after load, it replaces the blank page with a box naming the likely
+cause — opened from `file://`, assets missing at this address, a blocked
+script — plus the page URL, whether the stylesheet loaded, and any captured
+error, with a **Copy details** button.
+
 ```bash
 npm test            # unit tests for the scoring and join logic
 npm run icons       # regenerate the PWA icons

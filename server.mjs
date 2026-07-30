@@ -9,6 +9,7 @@
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { networkInterfaces } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -158,7 +159,30 @@ const server = http.createServer((req, res) => {
   return serveStatic(req, res, url.pathname);
 });
 
+/** IPv4 addresses this machine can be reached on from the local network. */
+function lanAddresses() {
+  const out = [];
+  for (const entries of Object.values(networkInterfaces())) {
+    for (const entry of entries || []) {
+      if (entry.family === 'IPv4' && !entry.internal) out.push(entry.address);
+    }
+  }
+  return out;
+}
+
 server.listen(PORT, HOST, () => {
-  console.log(`Strokes Gained running at http://${HOST}:${PORT}`);
+  const localHost = HOST === '0.0.0.0' || HOST === '::' ? '127.0.0.1' : HOST;
+  console.log(`Strokes Gained running at http://${localHost}:${PORT}`);
+
+  if (HOST === '0.0.0.0' || HOST === '::') {
+    for (const address of lanAddresses()) {
+      console.log(`  on this network:      http://${address}:${PORT}`);
+    }
+    console.log('  Reachable by anything on your network. They would still need');
+    console.log('  their own DataGolf key — the proxy holds none.');
+  } else {
+    console.log('  Phone or tablet? Run `npm run start:lan` to serve on your network too.');
+  }
+
   console.log('Paste your DataGolf API key in the app to load this week\'s field.');
 });

@@ -610,9 +610,12 @@ setInterval(() => {
 detectTransport().then((transport) => { state.transport = transport; });
 load();
 
+// Tells the boot watchdog in index.html that startup got this far.
+if (window.__sgBoot) window.__sgBoot.started = true;
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {
       // Service worker is an enhancement; the app works without it.
     });
   });
