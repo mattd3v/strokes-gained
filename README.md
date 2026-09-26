@@ -254,7 +254,7 @@ Download**. **Import** on another phone replaces that phone's book with the file
 
 | | |
 |---|---|
-| **Card** | Enter each player's nine-hole total for the day; blank means they didn't play. |
+| **Card** | Tick who played and enter their scores hole by hole. The total and differential fill in as you go, and a half-finished card survives a reload. |
 | **Strokes** | Tick who's playing. The lowest handicap plays off scratch and everyone else gets the difference. |
 | **Players** | Each index, plus the last 20 differentials with the ones that count circled. |
 | **Rounds** | Every round, editable, plus download/import. |
@@ -265,7 +265,7 @@ It is for one course — rating 27.3, slope 87, set in `COURSE` in
 `public/nine/js/handicap.js`. That file is pure and covered by
 `test/nine-handicap.test.mjs`.
 
-1. **Differential** = (113 ÷ 87) × (score − 27.3), to 0.1.
+1. **Differential** = (113 ÷ 87) × (nine-hole total − 27.3), to 0.1. Only cards with all nine holes scored count; an incomplete card is kept but ignored.
 2. **Index.** Take the most recent 20 rounds, and average the best of them:
 
    | Eligible rounds | 1–5 | 6–8 | 9–11 | 12–14 | 15–16 | 17–18 | 19 | 20+ |
@@ -275,8 +275,8 @@ It is for one course — rating 27.3, slope 87, set in `COURSE` in
 3. **Course handicap** = index × 87 ÷ 113, rounded.
 4. **Strokes to give** = each course handicap minus the lowest in the group.
 
-Scores are totals, not hole by hole, so there is no per-hole cap on blow-up
-holes and no placing strokes on particular holes. It is a pure nine-hole index,
+Holes have no par or handicap rating, so there is no per-hole cap on blow-up
+holes and strokes aren't placed on particular holes. It is a pure nine-hole index,
 never converted to 18 holes, without the official small-sample adjustments.
 
 ```bash

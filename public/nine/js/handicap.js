@@ -34,9 +34,22 @@ export function bestCountFor(eligibleRounds) {
   return BEST_OF_TABLE.find((r) => eligibleRounds >= r.from && eligibleRounds <= r.to).use;
 }
 
-/** A plausible nine-hole total: a whole number from 9 to 99. */
-export function isValidScore(score) {
-  return Number.isInteger(score) && score >= 9 && score <= 99;
+export const HOLES = 9;
+
+/** A hole score: a whole number of strokes from 1 to 20. */
+export function isValidHole(score) {
+  return Number.isInteger(score) && score >= 1 && score <= 20;
+}
+
+/** Nine scored holes. Only complete cards count toward a handicap. */
+export function isCompleteCard(holes) {
+  return Array.isArray(holes) && holes.length === HOLES && holes.every(isValidHole);
+}
+
+/** Sum of the holes played so far, or null if none. */
+export function cardTotal(holes) {
+  const played = (holes || []).filter(isValidHole);
+  return played.length ? played.reduce((a, b) => a + b, 0) : null;
 }
 
 export function scoreDifferential(score, course = COURSE) {
@@ -73,15 +86,16 @@ export function sortRounds(rounds) {
     (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || (a.createdAt || 0) - (b.createdAt || 0));
 }
 
-/** Every player's index, and the differential for every score on file. */
+/** Every player's index, and the differential for every complete card. */
 export function computeStandings(players, rounds, course = COURSE) {
   const byPlayer = new Map(players.map((p) => [p.id, []]));
   const diffs = new Map(); // `${roundId}:${playerId}` → differential
 
   for (const round of sortRounds(rounds)) {
-    for (const [playerId, score] of Object.entries(round.scores || {})) {
+    for (const [playerId, holes] of Object.entries(round.scores || {})) {
       const history = byPlayer.get(playerId);
-      if (!history || !isValidScore(score)) continue;
+      if (!history || !isCompleteCard(holes)) continue;
+      const score = cardTotal(holes);
       const differential = scoreDifferential(score, course);
       history.push({ roundId: round.id, date: round.date, score, differential });
       diffs.set(`${round.id}:${playerId}`, differential);

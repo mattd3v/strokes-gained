@@ -4,14 +4,17 @@ import {
   COURSE,
   STANDARD_SLOPE,
   BEST_OF_TABLE,
-  isValidScore,
+  HOLES,
+  isValidHole,
+  isCompleteCard,
+  cardTotal,
   scoreDifferential,
   computeStandings,
   strokesToGive,
 } from './handicap.js';
 import { uid, localDate, emptyBook, loadBook, saveBook, exportBook, importBook, demoBook } from './store.js';
 
-const DRAFT_KEY = 'nine.draft.v2';
+const DRAFT_KEY = 'nine.draft.v3';
 const TODAY_KEY = 'nine.today.v1';
 
 const page = document.getElementById('page');
@@ -19,7 +22,7 @@ const toastEl = document.getElementById('toast');
 
 let book = loadBook();
 let derived = computeStandings(book.players, book.rounds);
-let draft = loadJson(DRAFT_KEY); // { id, date, scores: { playerId: '34' } }
+let draft = loadJson(DRAFT_KEY); // { id, date, playing: [ids], scores: { playerId: [9 holes] } }
 
 /* ---------------- small helpers ---------------- */
 
@@ -109,12 +112,17 @@ function emptyPrompt(title, body) {
 
 /* ---------------- card ---------------- */
 
-const newDraft = () => ({ id: null, date: localDate(), scores: {} });
+const newDraft = () => ({ id: null, date: localDate(), playing: book.players.map((p) => p.id), scores: {} });
 
 function draftFromRound(round) {
   const scores = {};
-  for (const [pid, score] of Object.entries(round.scores)) scores[pid] = String(score);
-  return { id: round.id, date: round.date, scores };
+  for (const [pid, holes] of Object.entries(round.scores)) scores[pid] = [...holes];
+  return { id: round.id, date: round.date, playing: Object.keys(round.scores), scores };
+}
+
+function draftHoles(pid) {
+  if (!draft.scores[pid]) draft.scores[pid] = Array(HOLES).fill(null);
+  return draft.scores[pid];
 }
 
 function renderCard(roundId) {
@@ -128,15 +136,23 @@ function renderCard(roundId) {
     if (!draft || draft.id !== roundId) setDraft(draftFromRound(round));
   }
   if (!draft) setDraft(newDraft());
+  draft.playing = draft.playing.filter((id) => playerById(id));
   const editing = Boolean(draft.id);
+  const playing = draft.playing.map(playerById);
 
-  const rows = book.players.map((p) => `
-    <li>
-      <label for="score-${esc(p.id)}">${esc(p.name)}</label>
-      <input id="score-${esc(p.id)}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2"
-        autocomplete="off" data-score="${esc(p.id)}" value="${esc(draft.scores[p.id] ?? '')}" placeholder="—">
-      <span class="diff" data-diff="${esc(p.id)}"></span>
-    </li>`).join('');
+  const chips = book.players.map((p) => `
+    <label class="chip">
+      <input type="checkbox" data-play="${esc(p.id)}" ${draft.playing.includes(p.id) ? 'checked' : ''}>
+      <span class="tick" aria-hidden="true"></span>${esc(p.name)}
+    </label>`).join('');
+
+  const body = Array.from({ length: HOLES }, (_, i) => `<tr><th class="hole" scope="row">${i + 1}</th>${
+    playing.map((p) => `<td><input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off"
+      aria-label="${esc(p.name)}, hole ${i + 1}" data-player="${esc(p.id)}" data-hole="${i}"
+      value="${draftHoles(p.id)[i] ?? ''}"></td>`).join('')}</tr>`).join('');
+
+  const foot = (label, key, cls = '') => `<tr class="${cls}"><th scope="row">${label}</th>${
+    playing.map((p) => `<td data-${key}="${esc(p.id)}"></td>`).join('')}</tr>`;
 
   page.innerHTML = `
     <div class="page-head">
@@ -145,60 +161,88 @@ function renderCard(roundId) {
     </div>
     <label class="field" style="max-width:220px"><span class="label">Date</span>
       <input type="date" id="card-date" value="${esc(draft.date)}" required></label>
-    <div class="card-head"><span class="label">Player</span><span class="label">Nine</span><span class="label">Diff</span></div>
-    <ol class="entries">${rows}</ol>
-    <p class="note">Leave a score blank if they didn't play.</p>
-    <div class="sticky-actions spread">
-      <div class="row">
-        ${editing ? '<button type="button" class="btn danger small" data-action="delete-round">Delete</button>' : ''}
-        <button type="button" class="btn quiet small" data-action="clear-card">${editing ? 'Discard changes' : 'Clear'}</button>
+    <h3>Who played</h3>
+    <div class="chips">${chips}</div>
+    ${playing.length ? `
+      <div class="card-wrap">
+        <table class="scorecard">
+          <colgroup><col class="c-hole">${playing.map(() => '<col>').join('')}</colgroup>
+          <thead><tr><th scope="col">Hole</th>${playing.map((p) => `<th class="player-col" scope="col">${esc(p.name)}</th>`).join('')}</tr></thead>
+          <tbody>${body}</tbody>
+          <tfoot>${foot('Out', 'total')}${foot('Diff', 'diff', 'sub')}</tfoot>
+        </table>
       </div>
-      <button type="button" class="btn primary" data-action="save-card">${editing ? 'Save changes' : 'Sign card'}</button>
-    </div>
+      <div class="sticky-actions spread">
+        <div class="row">
+          ${editing ? '<button type="button" class="btn danger small" data-action="delete-round">Delete</button>' : ''}
+          <button type="button" class="btn quiet small" data-action="clear-card">${editing ? 'Discard changes' : 'Clear'}</button>
+        </div>
+        <button type="button" class="btn primary" data-action="save-card">${editing ? 'Save changes' : 'Sign card'}</button>
+      </div>`
+    : '<p class="note">Tick who played to open the card.</p>'}
   `;
-  for (const p of book.players) showDiff(p.id);
+  for (const p of playing) showTotals(p.id);
 }
 
-function showDiff(pid) {
-  const el = page.querySelector(`[data-diff="${CSS.escape(pid)}"]`);
-  if (!el) return;
-  const raw = draft.scores[pid];
-  const n = Number(raw);
-  el.textContent = !raw ? '' : isValidScore(n) ? fmtDiff(scoreDifferential(n)) : '?';
+function showTotals(pid) {
+  const holes = draftHoles(pid);
+  const total = cardTotal(holes);
+  const played = holes.filter((h) => h != null).length;
+  const set = (key, text) => {
+    const el = page.querySelector(`[data-${key}="${CSS.escape(pid)}"]`);
+    if (el) el.textContent = text;
+  };
+  set('total', total ?? '—');
+  set('diff', isCompleteCard(holes) ? fmtDiff(scoreDifferential(total)) : `${played}/9`);
+}
+
+function focusHole(pid, i) {
+  const next = page.querySelector(`[data-player="${CSS.escape(pid)}"][data-hole="${i}"]`);
+  if (next) next.focus(); else document.activeElement?.blur();
 }
 
 page.addEventListener('input', (e) => {
   const t = e.target;
-  if (t.matches('[data-score]')) {
+  if (t.matches('[data-hole]')) {
     const clean = t.value.replace(/\D/g, '').slice(0, 2);
     if (clean !== t.value) t.value = clean;
-    if (clean) draft.scores[t.dataset.score] = clean;
-    else delete draft.scores[t.dataset.score];
+    const n = Number(clean);
+    const i = Number(t.dataset.hole);
+    draftHoles(t.dataset.player)[i] = isValidHole(n) ? n : null;
     saveJson(DRAFT_KEY, draft);
-    showDiff(t.dataset.score);
-    // Two digits is a finished nine: move to the next player.
-    if (clean.length === 2) {
-      const inputs = [...page.querySelectorAll('[data-score]')];
-      const next = inputs[inputs.indexOf(t) + 1];
-      if (next) next.focus(); else t.blur();
-    }
+    showTotals(t.dataset.player);
+    // A single 2–9, or any two digits, is a finished hole: drop to the next one.
+    // A lone 1 waits, since it might be the start of 10.
+    if (/^[2-9]$|^\d\d$/.test(clean)) focusHole(t.dataset.player, i + 1);
   } else if (t.id === 'card-date') {
     draft.date = t.value;
     saveJson(DRAFT_KEY, draft);
   }
 });
-page.addEventListener('focusin', (e) => { if (e.target.matches('[data-score]')) e.target.select(); });
+
+page.addEventListener('keydown', (e) => {
+  const t = e.target;
+  if (!t.matches('[data-hole]')) return;
+  const i = Number(t.dataset.hole);
+  if (e.key === 'Enter' || e.key === 'ArrowDown') { e.preventDefault(); focusHole(t.dataset.player, i + 1); }
+  if (e.key === 'ArrowUp') { e.preventDefault(); focusHole(t.dataset.player, i - 1); }
+});
+page.addEventListener('focusin', (e) => { if (e.target.matches('[data-hole]')) e.target.select(); });
 
 function saveCard() {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.date || '')) { toast('Pick a date for the round.'); return; }
   const scores = {};
-  for (const [pid, raw] of Object.entries(draft.scores)) {
-    if (!playerById(pid)) continue;
-    const n = Number(raw);
-    if (!isValidScore(n)) { toast(`${playerById(pid).name}'s score doesn't look like a nine-hole total.`); return; }
-    scores[pid] = n;
+  const missing = [];
+  for (const pid of draft.playing) {
+    const holes = draftHoles(pid);
+    if (!holes.some((h) => h != null)) continue;
+    scores[pid] = [...holes];
+    if (!isCompleteCard(holes)) missing.push(playerById(pid).name);
   }
   if (!Object.keys(scores).length) { toast('Nothing on the card yet.'); return; }
+  if (missing.length && !confirm(
+    `${missing.join(', ')} ${missing.length > 1 ? 'are' : 'is'} missing holes. Incomplete cards are kept but don't count toward a handicap. Save anyway?`,
+  )) return;
 
   const existing = draft.id && book.rounds.find((r) => r.id === draft.id);
   if (existing) Object.assign(existing, { date: draft.date, scores });
@@ -312,7 +356,9 @@ page.addEventListener('submit', (e) => {
   const name = input.value.trim();
   if (!name) return;
   if (book.players.some((p) => p.name.toLowerCase() === name.toLowerCase())) { toast(`${name} is already in the book.`); return; }
-  book.players.push({ id: uid(), name });
+  const player = { id: uid(), name };
+  book.players.push(player);
+  if (draft && !draft.id) setDraft({ ...draft, playing: [...draft.playing, player.id] });
   commit(`${name} added.`);
   renderPlayers();
   document.getElementById('new-player').focus();
@@ -325,12 +371,13 @@ function renderRounds() {
   const slips = rounds.map((r) => {
     const lines = Object.entries(r.scores)
       .filter(([pid]) => playerById(pid))
-      .sort((a, b) => a[1] - b[1])
-      .map(([pid, score]) => {
+      .map(([pid, holes]) => [pid, holes, cardTotal(holes)])
+      .sort((a, b) => isCompleteCard(b[1]) - isCompleteCard(a[1]) || a[2] - b[2])
+      .map(([pid, holes, total]) => {
         const counts = standingFor(pid)?.used.has(r.id);
         return `<tr>
           <td>${esc(playerById(pid).name)}</td>
-          <td>${score}</td>
+          <td>${total}${isCompleteCard(holes) ? '' : ` <span class="fine">(${holes.filter((h) => h != null).length}/9)</span>`}</td>
           <td class="${counts ? 'counts' : ''}" ${counts ? 'title="Counts toward current index"' : ''}>${fmtDiff(derived.diffs.get(`${r.id}:${pid}`))}</td>
         </tr>`;
       }).join('');
@@ -368,7 +415,13 @@ function renderRounds() {
 
 page.addEventListener('change', (e) => {
   const t = e.target;
-  if (t.matches('[data-today]')) {
+  if (t.matches('[data-play]')) {
+    const id = t.dataset.play;
+    draft.playing = book.players.map((p) => p.id)
+      .filter((pid) => (pid === id ? t.checked : draft.playing.includes(pid)));
+    saveJson(DRAFT_KEY, draft);
+    renderCard(draft.id || undefined);
+  } else if (t.matches('[data-today]')) {
     saveJson(TODAY_KEY, [...page.querySelectorAll('[data-today]:checked')].map((el) => el.dataset.today));
     renderStrokes();
   } else if (t.id === 'import-file' && t.files[0]) {
@@ -399,7 +452,7 @@ page.addEventListener('click', (e) => {
   if (action === 'save-card') saveCard();
   else if (action === 'clear-card') {
     const editing = draft?.id;
-    if (!editing && Object.keys(draft?.scores || {}).length && !confirm('Clear every score on this card?')) return;
+    if (!editing && Object.values(draft?.scores || {}).some(cardTotal) && !confirm('Clear every score on this card?')) return;
     setDraft(editing ? draftFromRound(book.rounds.find((r) => r.id === editing)) : newDraft());
     renderCard(editing || undefined);
   } else if (action === 'new-card') {

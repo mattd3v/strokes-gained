@@ -1,9 +1,9 @@
 // The book: players and rounds, kept in this browser's localStorage.
 // Export/import moves it between phones.
 
-import { isValidScore } from './handicap.js';
+import { HOLES, isValidHole } from './handicap.js';
 
-const KEY = 'nine.book.v2';
+const KEY = 'nine.book.v3';
 export const FORMAT = 'nine-book';
 
 export function uid() {
@@ -35,9 +35,10 @@ export function normalize(raw) {
   for (const r of Array.isArray(raw.rounds) ? raw.rounds : []) {
     if (!r || !r.id || !/^\d{4}-\d{2}-\d{2}$/.test(r.date || '')) continue;
     const scores = {};
-    for (const [pid, score] of Object.entries(r.scores || {})) {
-      const n = Number(score);
-      if (ids.has(pid) && isValidScore(n)) scores[pid] = n;
+    for (const [pid, holes] of Object.entries(r.scores || {})) {
+      if (!ids.has(pid) || !Array.isArray(holes)) continue;
+      const clean = Array.from({ length: HOLES }, (_, i) => (isValidHole(Number(holes[i])) ? Number(holes[i]) : null));
+      if (clean.some((h) => h != null)) scores[pid] = clean;
     }
     if (!Object.keys(scores).length) continue;
     book.rounds.push({ id: String(r.id), date: r.date, createdAt: Number(r.createdAt) || 0, scores });
@@ -64,7 +65,7 @@ export function saveBook(book) {
 }
 
 export function exportBook(book) {
-  return JSON.stringify({ format: FORMAT, version: 2, exportedAt: new Date().toISOString(), ...book }, null, 2);
+  return JSON.stringify({ format: FORMAT, version: 3, exportedAt: new Date().toISOString(), ...book }, null, 2);
 }
 
 export function importBook(text) {
@@ -88,7 +89,7 @@ export function demoBook(today = new Date()) {
     seed = (seed * 16807) % 2147483647;
     return (seed - 1) / 2147483646;
   };
-  const typical = { Alex: 29, Jordan: 32, Sam: 35, Riley: 39 };
+  const typical = { Alex: 3.2, Jordan: 3.6, Sam: 3.9, Riley: 4.3 }; // strokes per hole
   const book = emptyBook();
   book.players = Object.keys(typical).map((name) => ({ id: uid(), name }));
 
@@ -98,7 +99,8 @@ export function demoBook(today = new Date()) {
     const scores = {};
     for (const p of book.players) {
       if (rand() < 0.15) continue; // someone always misses a week
-      scores[p.id] = typical[p.name] + Math.round((rand() + rand() + rand() - 1.5) * 4);
+      scores[p.id] = Array.from({ length: HOLES }, () =>
+        Math.max(2, Math.round(typical[p.name] + (rand() + rand() - 1) * 1.6)));
     }
     book.rounds.push({ id: uid(), date: localDate(d), createdAt: d.getTime(), scores });
   }

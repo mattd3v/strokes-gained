@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 
 import {
   bestCountFor,
-  isValidScore,
+  isCompleteCard,
+  cardTotal,
   courseHandicap,
   scoreDifferential,
   handicapIndex,
@@ -29,11 +30,20 @@ test('score differential uses 113 / slope against the rating', () => {
   assert.equal(scoreDifferential(27), -0.4);
 });
 
-test('scores must be whole nine-hole totals', () => {
-  assert.ok(isValidScore(34));
-  assert.ok(!isValidScore(8));
-  assert.ok(!isValidScore(34.5));
-  assert.ok(!isValidScore(null));
+const card = (...holes) => holes;
+
+test('a card counts only with all nine holes scored', () => {
+  assert.ok(isCompleteCard(card(3, 4, 3, 3, 5, 3, 3, 4, 3)));
+  assert.ok(!isCompleteCard(card(3, 4, 3, 3, 5, 3, 3, 4, null)));
+  assert.ok(!isCompleteCard(card(3, 4, 3, 3, 5, 3, 3, 4, 0)));
+  assert.ok(!isCompleteCard(card(3, 4, 3)));
+  assert.ok(!isCompleteCard(null));
+});
+
+test('card total adds the holes played so far', () => {
+  assert.equal(cardTotal(card(3, 4, 3, 3, 5, 3, 3, 4, 3)), 31);
+  assert.equal(cardTotal(card(3, 4, null, null, null, null, null, null, null)), 7);
+  assert.equal(cardTotal(Array(9).fill(null)), null);
 });
 
 test('handicap index averages the best N of the most recent 20', () => {
@@ -66,12 +76,18 @@ test('course handicap scales the index by slope', () => {
   assert.equal(courseHandicap(-1), -1);  // plus handicap: -0.77
 });
 
-test('standings read rounds in date order, skipping bad scores', () => {
+test('standings read rounds in date order, skipping incomplete cards', () => {
   const players = [{ id: 'a', name: 'Ann' }, { id: 'b', name: 'Bo' }];
   const rounds = [
     // Entered out of order on purpose.
-    { id: 'r2', date: '2026-06-08', scores: { a: 30 } },
-    { id: 'r1', date: '2026-06-01', scores: { a: 36, b: 5, ghost: 33 } },
+    { id: 'r2', date: '2026-06-08', scores: { a: card(3, 3, 4, 3, 3, 4, 3, 3, 4) } },   // 30
+    {
+      id: 'r1', date: '2026-06-01', scores: {
+        a: card(4, 4, 4, 4, 4, 4, 4, 4, 4),                                        // 36
+        b: card(4, 4, 4, 4, 4, 4, 4, 4, null),                                     // incomplete
+        ghost: card(3, 3, 3, 3, 3, 3, 3, 3, 3),                                    // not a player
+      },
+    },
   ];
   const { standings, diffs } = computeStandings(players, rounds);
   const ann = standings.find((s) => s.player.id === 'a');
