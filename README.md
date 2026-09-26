@@ -255,7 +255,7 @@ Download**. **Import** on another phone replaces that phone's book with the file
 | | |
 |---|---|
 | **Card** | Enter each player's nine-hole total for the day; blank means they didn't play. |
-| **Strokes** | Tick who's playing. The lowest handicap plays off scratch and everyone else gets the difference, with a head-to-head table for three or more. |
+| **Strokes** | Tick who's playing. The lowest handicap plays off scratch and everyone else gets the difference. |
 | **Players** | Each index, plus the last 20 differentials with the ones that count circled. |
 | **Rounds** | Every round, editable, plus download/import. |
 

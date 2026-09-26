@@ -118,8 +118,3 @@ export function strokesToGive(entries, course = COURSE) {
   const low = rows[0].courseHcp;
   return rows.map((r) => ({ ...r, strokes: r.courseHcp - low }));
 }
-
-/** Strokes the row player gives the column player (negative: receives). */
-export function strokeMatrix(rows) {
-  return rows.map((a) => rows.map((b) => b.courseHcp - a.courseHcp));
-}

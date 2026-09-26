@@ -8,7 +8,6 @@ import {
   scoreDifferential,
   computeStandings,
   strokesToGive,
-  strokeMatrix,
 } from './handicap.js';
 import { uid, localDate, emptyBook, loadBook, saveBook, exportBook, importBook, demoBook } from './store.js';
 
@@ -236,30 +235,13 @@ function renderStrokes() {
       <div class="meta">Index ${fmtIndex(r.index)} · Course hcp ${r.courseHcp}</div>
     </li>`).join('');
 
-  let matrix = '';
-  if (rows.length >= 3) {
-    const m = strokeMatrix(rows);
-    matrix = `
-      <h3>Head to head</h3>
-      <p class="note">Row gives column.</p>
-      <div class="table-wrap"><table class="matrix">
-        <thead><tr><th></th>${rows.map((r) => `<th scope="col">${esc(r.name)}</th>`).join('')}</tr></thead>
-        <tbody>${rows.map((a, i) => `<tr><th scope="row">${esc(a.name)}</th>${rows.map((b, j) => {
-          if (i === j) return '<td class="self"></td>';
-          const v = m[i][j];
-          return v > 0 ? `<td class="give">gives ${v}</td>` : v < 0 ? `<td>gets ${-v}</td>` : '<td class="zero">even</td>';
-        }).join('')}</tr>`).join('')}</tbody>
-      </table></div>`;
-  }
-
   page.innerHTML = `
     <div class="page-head"><h2>Strokes today</h2></div>
     <h3>Who's playing</h3>
     <div class="chips">${chips}</div>
     ${rows.length >= 2 ? `
       <ul class="giving">${list}</ul>
-      <p class="note">Lowest handicap plays off scratch; everyone else gets the difference.</p>
-      ${matrix}` : `<p class="note">${rated.length >= 2 ? 'Tick two or more players.' : 'Strokes appear once two players have signed a card.'}</p>`}
+      <p class="note">Lowest handicap plays off scratch; everyone else gets the difference.</p>` : `<p class="note">${rated.length >= 2 ? 'Tick two or more players.' : 'Strokes appear once two players have signed a card.'}</p>`}
   `;
 }
 

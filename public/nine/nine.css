@@ -354,8 +354,6 @@ p { margin: 8px 0; }
 .entries input:focus { outline: none; background: var(--highlight); border-bottom-color: var(--ink); }
 .entries .diff { font-family: var(--mono); font-size: 14px; color: var(--red); align-self: center; }
 
-.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-
 .sticky-actions {
   position: sticky;
   bottom: calc(68px + env(safe-area-inset-bottom));
@@ -401,12 +399,6 @@ p { margin: 8px 0; }
   color: var(--pencil);
 }
 .giving .big.scratch { color: var(--ink); }
-.matrix { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 13px; margin-top: 6px; }
-.matrix th, .matrix td { border: 1px solid var(--rule-strong); padding: 6px 4px; text-align: center; }
-.matrix th { font-family: var(--serif); font-size: 13px; font-weight: 700; }
-.matrix td.self { background: repeating-linear-gradient(45deg, transparent 0 4px, var(--rule) 4px 5px); }
-.matrix td.give { color: var(--red); font-weight: 700; }
-.matrix td.zero { color: var(--pencil-faint); }
 
 /* ---------------- players ---------------- */
 

@@ -9,7 +9,6 @@ import {
   handicapIndex,
   computeStandings,
   strokesToGive,
-  strokeMatrix,
 } from '../public/nine/js/handicap.js';
 
 test('bestCountFor follows the eligible-round table', () => {
@@ -94,8 +93,4 @@ test('strokes to give are relative to the lowest course handicap', () => {
     { id: 'd', index: null },
   ]);
   assert.deepEqual(rows.map((r) => [r.id, r.courseHcp, r.strokes]), [['b', 2, 0], ['a', 8, 6], ['c', 17, 15]]);
-
-  const m = strokeMatrix(rows);
-  assert.equal(m[0][2], 15);  // b gives c 15
-  assert.equal(m[2][1], -9);  // c receives 9 from a
 });
