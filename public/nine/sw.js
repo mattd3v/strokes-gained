@@ -2,7 +2,7 @@
 // localStorage, so caching the shell is all it takes to work offline on the
 // course.
 
-const VERSION = 'nine-v3';
+const VERSION = 'nine-v4';
 const SHELL = [
   './',
   './index.html',

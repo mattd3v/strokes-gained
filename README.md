@@ -254,14 +254,14 @@ Download**. **Import** on another phone replaces that phone's book with the file
 
 | | |
 |---|---|
-| **Card** | Tick who played and enter their scores hole by hole. The total and differential fill in as you go, and a half-finished card survives a reload. |
+| **Card** | Tick who played and enter their scores hole by hole. Birdies are circled and bogeys boxed (doubled for eagles and double bogey or worse). The total, score to par and differential fill in as you go, and a half-finished card survives a reload. |
 | **Strokes** | Tick who's playing. The lowest handicap plays off scratch and everyone else gets the difference. |
 | **Players** | Each index, plus the last 20 differentials with the ones that count circled. |
 | **Rounds** | Every round, editable, plus download/import. |
 
 ### The handicap maths
 
-It is for one course — rating 27.3, slope 87, set in `COURSE` in
+It is for one course — nine par 3s (par 27), rating 27.3, slope 87, set in `COURSE` and `PAR` in
 `public/nine/js/handicap.js`. That file is pure and covered by
 `test/nine-handicap.test.mjs`.
 
@@ -275,7 +275,7 @@ It is for one course — rating 27.3, slope 87, set in `COURSE` in
 3. **Course handicap** = index × 87 ÷ 113, rounded.
 4. **Strokes to give** = each course handicap minus the lowest in the group.
 
-Holes have no par or handicap rating, so there is no per-hole cap on blow-up
+Holes have no handicap rating, so there is no per-hole cap on blow-up
 holes and strokes aren't placed on particular holes. It is a pure nine-hole index,
 never converted to 18 holes, without the official small-sample adjustments.
 

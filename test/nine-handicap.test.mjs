@@ -5,6 +5,7 @@ import {
   bestCountFor,
   isCompleteCard,
   cardTotal,
+  markFor,
   courseHandicap,
   scoreDifferential,
   handicapIndex,
@@ -38,6 +39,10 @@ test('a card counts only with all nine holes scored', () => {
   assert.ok(!isCompleteCard(card(3, 4, 3, 3, 5, 3, 3, 4, 0)));
   assert.ok(!isCompleteCard(card(3, 4, 3)));
   assert.ok(!isCompleteCard(null));
+});
+
+test('holes are marked against par 3', () => {
+  assert.deepEqual([1, 2, 3, 4, 5, 9, null].map(markFor), ['eagle', 'birdie', '', 'bogey', 'double', 'double', '']);
 });
 
 test('card total adds the holes played so far', () => {

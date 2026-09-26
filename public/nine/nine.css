@@ -334,7 +334,7 @@ p { margin: 8px 0; }
   font-size: 13px;
   table-layout: fixed;
 }
-.scorecard col.c-hole { width: 46px; }
+.scorecard col.c-hole { width: 58px; }
 .scorecard th, .scorecard td {
   border: 1px solid var(--rule-strong);
   text-align: center;
@@ -380,6 +380,38 @@ p { margin: 8px 0; }
   caret-color: var(--red);
 }
 .scorecard input:focus { outline: none; background: var(--highlight); }
+
+/* Scorecard marks drawn round the pencilled number. */
+.cell { position: relative; display: grid; place-items: center; height: 100%; }
+.cell input { position: relative; z-index: 1; }
+.cell::before, .cell::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  pointer-events: none;
+  border: 1.5px solid transparent;
+  transform: translate(-50%, -50%);
+}
+.cell.eagle::before, .cell.birdie::before { width: 30px; height: 30px; border-radius: 50%; border-color: var(--red); }
+.cell.eagle::after { width: 38px; height: 38px; border-radius: 50%; border-color: var(--red); }
+.cell.bogey::before, .cell.double::before { width: 28px; height: 28px; border-color: var(--ink-soft); }
+.cell.double::after { width: 36px; height: 36px; border-color: var(--ink-soft); }
+.cell.eagle input, .cell.birdie input { color: var(--red); }
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--pencil);
+}
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.mk { width: 14px; height: 14px; display: inline-block; border: 1.5px solid; }
+.mk.circle { border-radius: 50%; border-color: var(--red); }
+.mk.square { border-color: var(--ink-soft); }
 .scorecard tfoot th, .scorecard tfoot td {
   border-top: 2px solid var(--ink);
   font-weight: 700;
@@ -394,6 +426,8 @@ p { margin: 8px 0; }
   height: 32px;
 }
 .scorecard tfoot .sub th { color: var(--pencil); }
+.scorecard tfoot .par-row td { color: var(--ink-soft); }
+.scorecard thead th .fine { font-size: 9.5px; letter-spacing: 0.04em; text-transform: none; font-weight: 400; }
 
 .sticky-actions {
   position: sticky;

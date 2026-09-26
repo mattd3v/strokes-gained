@@ -5,6 +5,8 @@ import {
   STANDARD_SLOPE,
   BEST_OF_TABLE,
   HOLES,
+  PAR,
+  markFor,
   isValidHole,
   isCompleteCard,
   cardTotal,
@@ -77,6 +79,7 @@ function setDraft(next) {
 function renderMasthead() {
   document.getElementById('stamp-rating').textContent = COURSE.rating.toFixed(1);
   document.getElementById('stamp-slope').textContent = COURSE.slope;
+  document.getElementById('stamp-par').textContent = PAR * HOLES;
   document.getElementById('course-line').textContent =
     `${plural(book.players.length, 'player')} · ${plural(book.rounds.length, 'round')}`;
 }
@@ -147,9 +150,9 @@ function renderCard(roundId) {
     </label>`).join('');
 
   const body = Array.from({ length: HOLES }, (_, i) => `<tr><th class="hole" scope="row">${i + 1}</th>${
-    playing.map((p) => `<td><input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off"
+    playing.map((p) => `<td><div class="cell ${markFor(draftHoles(p.id)[i])}"><input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off"
       aria-label="${esc(p.name)}, hole ${i + 1}" data-player="${esc(p.id)}" data-hole="${i}"
-      value="${draftHoles(p.id)[i] ?? ''}"></td>`).join('')}</tr>`).join('');
+      value="${draftHoles(p.id)[i] ?? ''}"></div></td>`).join('')}</tr>`).join('');
 
   const foot = (label, key, cls = '') => `<tr class="${cls}"><th scope="row">${label}</th>${
     playing.map((p) => `<td data-${key}="${esc(p.id)}"></td>`).join('')}</tr>`;
@@ -164,12 +167,13 @@ function renderCard(roundId) {
     <h3>Who played</h3>
     <div class="chips">${chips}</div>
     ${playing.length ? `
+      <div class="legend"><span><i class="mk circle"></i>birdie</span><span><i class="mk square"></i>bogey</span><span>doubled: eagle or double bogey+</span></div>
       <div class="card-wrap">
         <table class="scorecard">
           <colgroup><col class="c-hole">${playing.map(() => '<col>').join('')}</colgroup>
-          <thead><tr><th scope="col">Hole</th>${playing.map((p) => `<th class="player-col" scope="col">${esc(p.name)}</th>`).join('')}</tr></thead>
+          <thead><tr><th scope="col">Hole<br><span class="fine">par ${PAR}</span></th>${playing.map((p) => `<th class="player-col" scope="col">${esc(p.name)}</th>`).join('')}</tr></thead>
           <tbody>${body}</tbody>
-          <tfoot>${foot('Out', 'total')}${foot('Diff', 'diff', 'sub')}</tfoot>
+          <tfoot>${foot(`Out <span class="fine">${PAR * HOLES}</span>`, 'total')}${foot('<span aria-label="To par">±</span>', 'topar', 'sub par-row')}${foot('Diff', 'diff', 'sub')}</tfoot>
         </table>
       </div>
       <div class="sticky-actions spread">
@@ -192,7 +196,10 @@ function showTotals(pid) {
     const el = page.querySelector(`[data-${key}="${CSS.escape(pid)}"]`);
     if (el) el.textContent = text;
   };
-  set('total', total ?? '—');
+  set('total', total == null ? '—' : `${total}`);
+  const toPar = total == null ? null : total - PAR * played;
+  const rel = page.querySelector(`[data-topar="${CSS.escape(pid)}"]`);
+  if (rel) rel.textContent = toPar == null ? '' : toPar === 0 ? 'E' : toPar > 0 ? `+${toPar}` : `${toPar}`;
   set('diff', isCompleteCard(holes) ? fmtDiff(scoreDifferential(total)) : `${played}/9`);
 }
 
@@ -209,6 +216,7 @@ page.addEventListener('input', (e) => {
     const n = Number(clean);
     const i = Number(t.dataset.hole);
     draftHoles(t.dataset.player)[i] = isValidHole(n) ? n : null;
+    t.closest('.cell').className = `cell ${markFor(n)}`;
     saveJson(DRAFT_KEY, draft);
     showTotals(t.dataset.player);
     // A single 2–9, or any two digits, is a finished hole: drop to the next one.

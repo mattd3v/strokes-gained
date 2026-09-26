@@ -8,6 +8,8 @@
 //   Strokes to give  = each course handicap minus the lowest in the group
 
 export const COURSE = Object.freeze({ rating: 27.3, slope: 87 });
+export const PAR = 3; // every hole
+
 export const STANDARD_SLOPE = 113;
 export const WINDOW = 20;
 
@@ -44,6 +46,13 @@ export function isValidHole(score) {
 /** Nine scored holes. Only complete cards count toward a handicap. */
 export function isCompleteCard(holes) {
   return Array.isArray(holes) && holes.length === HOLES && holes.every(isValidHole);
+}
+
+/** Scorecard mark for a hole: two or more under, one under, one over, two or more over. */
+export function markFor(score) {
+  if (!isValidHole(score)) return '';
+  const d = score - PAR;
+  return d <= -2 ? 'eagle' : d === -1 ? 'birdie' : d === 1 ? 'bogey' : d >= 2 ? 'double' : '';
 }
 
 /** Sum of the holes played so far, or null if none. */
