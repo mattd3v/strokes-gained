@@ -26,7 +26,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root {
     color-scheme: dark;
     --desk: #12110d;
     --paper: #1f1c16;
@@ -45,26 +45,6 @@
     --grain-opacity: 0.5;
     --shadow: 0 2px 3px rgba(0, 0, 0, 0.4), 0 18px 40px rgba(0, 0, 0, 0.5);
   }
-}
-
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --desk: #12110d;
-  --paper: #1f1c16;
-  --paper-deep: #26221b;
-  --paper-edge: #3a3428;
-  --ink: #ece3cc;
-  --ink-soft: #cbbf9f;
-  --pencil: #a79d85;
-  --pencil-faint: #7c735f;
-  --rule: #37322a;
-  --rule-strong: #564e3f;
-  --red: #e0786c;
-  --green: #93b58c;
-  --blue: #93afd1;
-  --highlight: rgba(233, 196, 72, 0.18);
-  --grain-opacity: 0.5;
-  --shadow: 0 2px 3px rgba(0, 0, 0, 0.4), 0 18px 40px rgba(0, 0, 0, 0.5);
 }
 
 * { box-sizing: border-box; }
@@ -93,9 +73,8 @@ body::after {
   mix-blend-mode: multiply;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .45 0 0 0 0 .38 0 0 0 0 .25 0 0 0 .22 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
-:root[data-theme="dark"] body::after { mix-blend-mode: screen; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) body::after { mix-blend-mode: screen; }
+  body::after { mix-blend-mode: screen; }
 }
 
 button, input, select { font: inherit; color: inherit; }
@@ -187,12 +166,9 @@ h1 {
   line-height: 1.25;
   text-align: left;
   transform: rotate(-2.5deg);
-  cursor: pointer;
   opacity: 0.9;
-  box-shadow: 0 0 0 1px transparent;
 }
 .stamp b { font-weight: 700; letter-spacing: 0.06em; display: inline-block; min-width: 2.6em; }
-.stamp:hover { opacity: 1; }
 
 main { outline: none; }
 
@@ -264,6 +240,10 @@ p { margin: 8px 0; }
 
 .btn {
   appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
   border: 1.5px solid var(--ink);
   background: transparent;
   color: var(--ink);
@@ -341,166 +321,40 @@ p { margin: 8px 0; }
 
 /* ---------------- scorecard ---------------- */
 
-.card-wrap {
-  margin: 14px -4px 0;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-.scorecard {
-  width: 100%;
-  border-collapse: collapse;
-  font-family: var(--mono);
-  font-size: 13px;
-  table-layout: fixed;
-}
-.scorecard th, .scorecard td {
-  border: 1px solid var(--rule-strong);
-  text-align: center;
-  padding: 0;
-  height: 46px;
-}
-.scorecard thead th {
-  height: auto;
-  padding: 6px 2px;
-  font-weight: 600;
-  font-size: 10.5px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-  border-bottom: 2px solid var(--ink);
-  vertical-align: bottom;
-}
-.scorecard thead th.player-col {
-  font-family: var(--serif);
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: 14px;
-  color: var(--ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.scorecard .gets {
-  display: block;
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--red);
-  font-weight: 400;
-  letter-spacing: 0.04em;
-}
-.scorecard col.c-hole { width: 38px; }
-.scorecard col.c-par, .scorecard col.c-si { width: 34px; }
-.scorecard .hole { font-weight: 700; font-size: 16px; font-family: var(--serif); }
-.scorecard .par { color: var(--ink-soft); }
-.scorecard .si { color: var(--pencil); font-size: 11px; }
-.scorecard tbody tr:nth-child(odd) td, .scorecard tbody tr:nth-child(odd) th { background: rgba(120, 100, 60, 0.035); }
-.scorecard tfoot td, .scorecard tfoot th {
-  border-top: 2px solid var(--ink);
-  font-weight: 700;
-  height: 40px;
-}
-.scorecard tfoot .sub td, .scorecard tfoot .sub th {
-  border-top-width: 1px;
-  border-top-color: var(--rule-strong);
-  font-weight: 400;
-  color: var(--pencil);
-  font-size: 12px;
-  height: 32px;
-}
-.scorecard tfoot th { font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; }
-
-/* A score cell: pencil number, scorecard marks drawn round it. */
-.cell {
-  position: relative;
+/* One ruled line per player: name, pencilled total, differential. */
+.card-head, .entries li {
   display: grid;
-  place-items: center;
-  height: 100%;
+  grid-template-columns: 1fr 72px 56px;
+  align-items: end;
+  gap: 12px;
 }
-.cell input {
-  width: 34px;
-  height: 34px;
+.card-head {
+  margin-top: 20px;
+  padding-bottom: 4px;
+  border-bottom: 2px solid var(--ink);
+}
+.card-head .label:not(:first-child), .entries .diff { text-align: right; }
+.entries { list-style: none; margin: 0; padding: 0; }
+.entries li { border-bottom: 1px solid var(--rule-strong); min-height: 58px; padding: 4px 0; }
+.entries label { font-size: 20px; font-weight: 700; align-self: center; cursor: text; }
+.entries input {
+  width: 100%;
+  height: 48px;
   border: 0;
+  border-bottom: 1.5px dotted var(--rule-strong);
   background: transparent;
   text-align: center;
   font-family: var(--hand);
-  font-size: 21px;
+  font-size: 30px;
   color: var(--ink);
   padding: 0;
-  border-radius: 50%;
-  position: relative;
-  z-index: 1;
   caret-color: var(--red);
 }
-.cell input:focus { outline: none; background: var(--highlight); }
-.cell::before, .cell::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  pointer-events: none;
-  border: 1.5px solid transparent;
-  transform: translate(-50%, -50%);
-}
-.cell.eagle::before, .cell.birdie::before { width: 30px; height: 30px; border-radius: 50%; border-color: var(--red); }
-.cell.eagle::after { width: 38px; height: 38px; border-radius: 50%; border-color: var(--red); }
-.cell.bogey::before, .cell.double::before { width: 28px; height: 28px; border-color: var(--ink-soft); }
-.cell.double::after { width: 36px; height: 36px; border-color: var(--ink-soft); }
-.cell.eagle input, .cell.birdie input { color: var(--red); }
-/* Pencilled cap: a light strike and the adjusted number in the corner. */
-.cell .capped {
-  position: absolute;
-  right: 3px;
-  bottom: 1px;
-  font-size: 10px;
-  color: var(--pencil);
-  font-family: var(--mono);
-}
+.entries input::placeholder { color: var(--rule-strong); }
+.entries input:focus { outline: none; background: var(--highlight); border-bottom-color: var(--ink); }
+.entries .diff { font-family: var(--mono); font-size: 14px; color: var(--red); align-self: center; }
 
-/* Handicap dots: strokes received on the hole. */
-.dots {
-  position: absolute;
-  top: 3px;
-  left: 4px;
-  display: flex;
-  gap: 2px;
-}
-.dots i {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--ink);
-  display: block;
-}
-
-.totals-strip {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 8px;
-  margin-top: 14px;
-}
-.slip {
-  border: 1px solid var(--rule-strong);
-  border-radius: 4px;
-  padding: 8px 10px;
-  background: var(--paper-deep);
-}
-.slip .name { font-weight: 700; }
-.slip .nums { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
-
-.legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
-  font-size: 12px;
-  color: var(--pencil);
-  margin-top: 8px;
-  font-family: var(--mono);
-}
-.legend span { display: inline-flex; align-items: center; gap: 6px; }
-.mk { width: 14px; height: 14px; display: inline-block; border: 1.5px solid; }
-.mk.circle { border-radius: 50%; border-color: var(--red); }
-.mk.square { border-color: var(--ink-soft); }
-.mk.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink); border: 0; }
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
 .sticky-actions {
   position: sticky;
@@ -547,30 +401,6 @@ p { margin: 8px 0; }
   color: var(--pencil);
 }
 .giving .big.scratch { color: var(--ink); }
-.holes-strip {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: repeat(9, 1fr);
-  gap: 3px;
-  margin-top: 6px;
-}
-.holes-strip > span {
-  border: 1px solid var(--rule-strong);
-  border-radius: 3px;
-  text-align: center;
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--pencil);
-  padding: 2px 0 3px;
-  min-height: 30px;
-  display: grid;
-  align-content: start;
-  gap: 2px;
-}
-.holes-strip > span.on { border-color: var(--ink); color: var(--ink); background: var(--paper-deep); }
-.holes-strip .d { display: flex; justify-content: center; gap: 2px; }
-.holes-strip .d i { width: 5px; height: 5px; border-radius: 50%; background: var(--ink); }
-
 .matrix { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 13px; margin-top: 6px; }
 .matrix th, .matrix td { border: 1px solid var(--rule-strong); padding: 6px 4px; text-align: center; }
 .matrix th { font-family: var(--serif); font-size: 13px; font-weight: 700; }
@@ -640,13 +470,12 @@ p { margin: 8px 0; }
 .round-head {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
-  padding: 8px 12px;
+  align-items: center;
+  padding: 6px 12px;
   border-bottom: 1px dashed var(--rule-strong);
   gap: 8px;
 }
 .round-date { font-weight: 700; }
-.round-course { font-size: 13px; color: var(--pencil); font-style: italic; }
 .round table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .round th, .round td { padding: 6px 12px; text-align: right; font-family: var(--mono); }
 .round th:first-child, .round td:first-child { text-align: left; font-family: var(--serif); }
@@ -659,52 +488,8 @@ p { margin: 8px 0; }
   font-weight: 400;
 }
 .round td.counts { color: var(--red); font-weight: 700; }
-.round .round-actions { padding: 6px 12px 10px; }
 
-/* ---------------- course ---------------- */
-
-.hole-grid {
-  display: grid;
-  grid-template-columns: 52px repeat(9, 1fr);
-  border: 1px solid var(--rule-strong);
-  border-radius: 3px;
-  overflow: hidden;
-  font-family: var(--mono);
-  font-size: 12px;
-}
-.hole-grid > * {
-  border-right: 1px solid var(--rule);
-  border-bottom: 1px solid var(--rule);
-  text-align: center;
-  min-height: 38px;
-  display: grid;
-  place-items: center;
-}
-.hole-grid .hd { font-size: 10px; letter-spacing: 0.1em; color: var(--pencil); text-transform: uppercase; }
-.hole-grid .hn { font-family: var(--serif); font-weight: 700; font-size: 15px; border-bottom: 2px solid var(--ink); }
-.hole-grid input {
-  width: 100%;
-  height: 38px;
-  border: 0;
-  background: transparent;
-  text-align: center;
-  font-family: var(--hand);
-  font-size: 18px;
-  padding: 0;
-}
-.hole-grid input:focus { outline: none; background: var(--highlight); }
-
-.problems {
-  border-left: 3px solid var(--red);
-  padding: 4px 12px;
-  color: var(--red);
-  margin: 12px 0;
-  font-size: 14px;
-}
-.problems p { margin: 4px 0; }
-
-.switch { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
-.switch input { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--ink); flex: none; }
+/* ---------------- how it works ---------------- */
 
 .table-book { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 13px; }
 .table-book th, .table-book td { padding: 7px 4px; border-bottom: 1px solid var(--rule); text-align: left; }
@@ -791,7 +576,4 @@ p { margin: 8px 0; }
 
 @media (max-width: 380px) {
   h1 { font-size: 32px; }
-  .scorecard col.c-hole { width: 32px; }
-  .scorecard col.c-par, .scorecard col.c-si { width: 28px; }
-  .cell input { width: 30px; font-size: 19px; }
 }

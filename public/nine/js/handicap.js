@@ -1,26 +1,15 @@
-// Nine-hole handicap maths. Pure: no DOM, no storage, so it runs under node:test.
+// Nine-hole handicap maths for one course. Pure: no DOM, no storage, so it
+// runs under node:test.
 //
-// The pieces, in the order a round flows through them:
-//   1. Adjusted gross score — each hole capped at net double bogey, so one
-//      blow-up hole cannot wreck a handicap.
-//   2. Score differential — (113 / slope) × (adjusted gross − course rating).
-//   3. Handicap index — the best N differentials from the most recent 20,
-//      with N taken from the eligible-round table below.
-//   4. Course handicap — index × slope / 113 + (rating − par), rounded.
-//   5. Strokes to give — each player's course handicap minus the lowest one
-//      in the group, spread across holes by stroke index.
+//   Differential     = (113 / slope) × (score − course rating)
+//   Handicap index   = average of the best N differentials from the most
+//                      recent 20, with N from the table below
+//   Course handicap  = index × slope / 113, rounded
+//   Strokes to give  = each course handicap minus the lowest in the group
 
-export const HOLES = 9;
-export const WINDOW = 20;
+export const COURSE = Object.freeze({ rating: 27.3, slope: 87 });
 export const STANDARD_SLOPE = 113;
-
-export const DEFAULT_COURSE = Object.freeze({
-  name: 'Home nine',
-  rating: 27.3,
-  slope: 87,
-  pars: Object.freeze([3, 3, 3, 3, 3, 3, 3, 3, 3]),
-  strokeIndex: Object.freeze([1, 2, 3, 4, 5, 6, 7, 8, 9]),
-});
+export const WINDOW = 20;
 
 /** Eligible rounds → how many of the best differentials count. */
 export const BEST_OF_TABLE = Object.freeze([
@@ -42,75 +31,22 @@ export function round1(x) {
 
 export function bestCountFor(eligibleRounds) {
   if (!(eligibleRounds >= 1)) return 0;
-  const row = BEST_OF_TABLE.find((r) => eligibleRounds >= r.from && eligibleRounds <= r.to);
-  return row ? row.use : 8;
+  return BEST_OF_TABLE.find((r) => eligibleRounds >= r.from && eligibleRounds <= r.to).use;
 }
 
-export function coursePar(course) {
-  return course.pars.reduce((a, b) => a + b, 0);
+/** A plausible nine-hole total: a whole number from 9 to 99. */
+export function isValidScore(score) {
+  return Number.isInteger(score) && score >= 9 && score <= 99;
 }
 
-export function isCompleteCard(holes) {
-  return Array.isArray(holes)
-    && holes.length === HOLES
-    && holes.every((h) => Number.isInteger(h) && h > 0);
+export function scoreDifferential(score, course = COURSE) {
+  return round1((STANDARD_SLOPE / course.slope) * (score - course.rating));
 }
 
-export function grossScore(holes) {
-  if (!Array.isArray(holes)) return null;
-  const filled = holes.filter((h) => Number.isInteger(h) && h > 0);
-  return filled.length ? filled.reduce((a, b) => a + b, 0) : null;
-}
-
-/**
- * Strokes received on each hole for a given number of handicap strokes.
- * Strokes land on the lowest stroke index first; more than nine wraps round
- * for a second stroke. A negative count (a plus handicap) gives strokes back
- * starting from the easiest hole.
- */
-export function strokesByHole(strokes, strokeIndex) {
-  const n = strokeIndex.length;
-  const s = Math.round(strokes);
-  if (s === 0) return strokeIndex.map(() => 0);
-  const sign = Math.sign(s);
-  const abs = Math.abs(s);
-  const base = Math.floor(abs / n);
-  const extra = abs % n;
-  return strokeIndex.map((si) => {
-    // For giving strokes back, the hardest-to-par hole is the easiest one.
-    const rank = sign > 0 ? si : n + 1 - si;
-    const count = base + (rank <= extra ? 1 : 0);
-    return count ? sign * count : 0;
-  });
-}
-
-/** Unrounded course handicap; rounding happens where the number is used. */
-export function courseHandicapExact(index, course) {
-  return index * (course.slope / STANDARD_SLOPE) + (course.rating - coursePar(course));
-}
-
-export function courseHandicap(index, course) {
+export function courseHandicap(index, course = COURSE) {
   if (index == null) return null;
-  const r = Math.round(courseHandicapExact(index, course));
+  const r = Math.round(index * (course.slope / STANDARD_SLOPE));
   return Object.is(r, -0) ? 0 : r;
-}
-
-/**
- * Caps each hole for handicap purposes. With a course handicap the cap is
- * net double bogey (par + 2 + strokes received). With no index yet the cap
- * is par + 5, the usual rule for a player's first rounds.
- */
-export function adjustedHoles(holes, course, courseHcp) {
-  const received = courseHcp == null ? null : strokesByHole(courseHcp, course.strokeIndex);
-  return holes.map((score, i) => {
-    const par = course.pars[i];
-    const cap = received ? par + 2 + received[i] : par + 5;
-    return Math.min(score, cap);
-  });
-}
-
-export function scoreDifferential(adjustedGross, course) {
-  return round1((STANDARD_SLOPE / course.slope) * (adjustedGross - course.rating));
 }
 
 /**
@@ -122,14 +58,14 @@ export function handicapIndex(entries) {
   const use = bestCountFor(recent.length);
   if (!use) return { index: null, used: [], window: recent, use: 0 };
 
-  // Stable on ties: the earlier round wins, so the same card always counts.
-  const ranked = recent
+  // Stable on ties: the earlier round wins, so the same one always counts.
+  const best = recent
     .map((e, order) => ({ e, order }))
     .sort((a, b) => a.e.differential - b.e.differential || a.order - b.order)
     .slice(0, use)
     .map(({ e }) => e);
-  const avg = ranked.reduce((sum, e) => sum + e.differential, 0) / use;
-  return { index: round1(avg), used: ranked, window: recent, use };
+  const avg = best.reduce((sum, e) => sum + e.differential, 0) / use;
+  return { index: round1(avg), used: best, window: recent, use };
 }
 
 export function sortRounds(rounds) {
@@ -137,111 +73,53 @@ export function sortRounds(rounds) {
     (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || (a.createdAt || 0) - (b.createdAt || 0));
 }
 
-/**
- * Replays every round in date order. Each card is adjusted using the index
- * the player carried into that round, which is what makes the cap honest:
- * editing an old round re-flows everything after it.
- */
-export function computeStandings(players, rounds, { capHoles = true } = {}) {
+/** Every player's index, and the differential for every score on file. */
+export function computeStandings(players, rounds, course = COURSE) {
   const byPlayer = new Map(players.map((p) => [p.id, []]));
-  const cards = new Map();
+  const diffs = new Map(); // `${roundId}:${playerId}` → differential
 
   for (const round of sortRounds(rounds)) {
-    const course = round.course;
-    for (const [playerId, holes] of Object.entries(round.scores || {})) {
+    for (const [playerId, score] of Object.entries(round.scores || {})) {
       const history = byPlayer.get(playerId);
-      if (!history) continue;
-      const key = `${round.id}:${playerId}`;
-      const gross = grossScore(holes);
-
-      if (!isCompleteCard(holes)) {
-        cards.set(key, { roundId: round.id, playerId, gross, complete: false });
-        continue;
-      }
-
-      const before = handicapIndex(history).index;
-      const ch = courseHandicap(before, course);
-      const adjusted = capHoles ? adjustedHoles(holes, course, ch) : [...holes];
-      const adjustedGross = adjusted.reduce((a, b) => a + b, 0);
-      const entry = {
-        roundId: round.id,
-        playerId,
-        date: round.date,
-        gross,
-        adjustedGross,
-        adjusted,
-        indexBefore: before,
-        differential: scoreDifferential(adjustedGross, course),
-        complete: true,
-      };
-      history.push(entry);
-      cards.set(key, entry);
+      if (!history || !isValidScore(score)) continue;
+      const differential = scoreDifferential(score, course);
+      history.push({ roundId: round.id, date: round.date, score, differential });
+      diffs.set(`${round.id}:${playerId}`, differential);
     }
   }
 
-  const standings = players.map((p) => {
-    const history = byPlayer.get(p.id);
-    const result = handicapIndex(history);
+  const standings = players.map((player) => {
+    const history = byPlayer.get(player.id);
+    const { index, used, window, use } = handicapIndex(history);
     return {
-      player: p,
+      player,
       history,
-      index: result.index,
-      used: new Set(result.used.map((e) => e.roundId)),
-      window: new Set(result.window.map((e) => e.roundId)),
-      use: result.use,
-      eligible: result.window.length,
-      total: history.length,
+      index,
+      used: new Set(used.map((e) => e.roundId)),
+      window: new Set(window.map((e) => e.roundId)),
+      use,
+      eligible: window.length,
     };
   });
 
-  return { standings, cards };
+  return { standings, diffs };
 }
 
 /**
- * Who gets how many from whom. The lowest playing handicap plays off
- * scratch and everyone else receives the difference, allocated hole by hole.
+ * Who gets how many. The lowest course handicap plays off scratch and
+ * everyone else receives the difference. Players without an index are left out.
  */
-export function strokesToGive(entries, course, allowance = 100) {
-  const rated = entries
+export function strokesToGive(entries, course = COURSE) {
+  const rows = entries
     .filter((e) => e.index != null)
-    .map((e) => {
-      const exact = courseHandicapExact(e.index, course);
-      const courseHcp = Math.round(exact);
-      const playing = Math.round(exact * (allowance / 100));
-      return { ...e, courseHcp: Object.is(courseHcp, -0) ? 0 : courseHcp, playing: Object.is(playing, -0) ? 0 : playing };
-    })
-    .sort((a, b) => a.playing - b.playing || a.index - b.index);
-
-  if (!rated.length) return { low: null, rows: [] };
-  const low = rated[0].playing;
-  const rows = rated.map((e) => {
-    const strokes = e.playing - low;
-    return { ...e, strokes, perHole: strokesByHole(strokes, course.strokeIndex) };
-  });
-  return { low: rated[0], rows };
+    .map((e) => ({ ...e, courseHcp: courseHandicap(e.index, course) }))
+    .sort((a, b) => a.courseHcp - b.courseHcp || a.index - b.index);
+  if (!rows.length) return [];
+  const low = rows[0].courseHcp;
+  return rows.map((r) => ({ ...r, strokes: r.courseHcp - low }));
 }
 
 /** Strokes the row player gives the column player (negative: receives). */
 export function strokeMatrix(rows) {
-  return rows.map((a) => rows.map((b) => b.playing - a.playing));
-}
-
-/** Plain problems with a course's numbers, as sentences. Empty means fine. */
-export function courseProblems(course) {
-  const problems = [];
-  if (!(course.slope >= 55 && course.slope <= 155)) {
-    problems.push('Slope should be between 55 and 155 (113 is average).');
-  }
-  const par = coursePar(course);
-  if (!(course.rating > 0) || Math.abs(course.rating - par) > 12) {
-    problems.push(`Course rating is normally within a few strokes of par (${par}).`);
-  }
-  if (!course.pars.every((p) => Number.isInteger(p) && p >= 3 && p <= 6)) {
-    problems.push('Each par should be a whole number from 3 to 6.');
-  }
-  const si = [...course.strokeIndex].sort((a, b) => a - b);
-  if (!si.every((v, i) => v === i + 1)) {
-    problems.push('Stroke index should use each number 1 to 9 once.');
-  }
-  return problems;
+  return rows.map((a) => rows.map((b) => b.courseHcp - a.courseHcp));
 }
