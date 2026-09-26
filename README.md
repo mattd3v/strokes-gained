@@ -236,6 +236,68 @@ dependency-free Node is the smallest honest version of that.
 of upstream paths, forwards rate-limit headers back to the page, and never logs
 your key.
 
+## The Nine: a nine-hole handicap book
+
+`public/nine/` is a second, separate app: a scorebook for a group of friends who
+play the same nine. It keeps the rounds, works out each player's handicap, and
+tells you how many strokes everyone gets today. It is also where the
+paper/yardage-book look is being tried out before it goes anywhere else: card
+stock, pencilled scores, birdies circled in red ink and bogeys boxed.
+
+```bash
+npm start           # then open http://127.0.0.1:5173/nine/
+```
+
+It needs no API key and no server of its own. `public/nine/` is plain static
+files, so any static host works, and it installs as its own PWA. Everything is
+kept in the browser's `localStorage`. One person keeps the book and shares it
+with **Course → Download**. **Import** on another phone replaces that phone's
+book with the file. **Load demo** fills it with a made-up twelve-week season.
+
+### Pages
+
+| | |
+|---|---|
+| **Card** | Enter a round hole by hole. Dots show where each player's strokes fall today, and the Adj/Diff rows update as you type. A half-finished card survives a reload. |
+| **Strokes** | Tick who's playing. The lowest handicap plays off scratch, and everyone else gets the difference, placed on holes by stroke index. With three or more players there's also a head-to-head table. |
+| **Players** | Each index, plus the last 20 differentials with the ones that count circled. |
+| **Rounds** | Every card, with gross, adjusted and differential. Tap one to edit it. |
+| **Course** | Rating, slope, par and stroke index per hole, the rules, and import/export. |
+
+### The handicap maths
+
+All of it is in `public/nine/js/handicap.js`, which is pure and covered by
+`test/nine-handicap.test.mjs`.
+
+1. **Adjusted score.** Each hole is capped at net double bogey (par + 2 + strokes
+   received), using the index the player had *before* that round. Before a
+   player has any index, the cap is par + 5. You can switch this off under Course → Rules.
+2. **Differential** = (113 ÷ slope) × (adjusted score − course rating), to 0.1.
+3. **Index.** Take the most recent 20 complete nines, and average the best of them:
+
+   | Eligible rounds | 1–5 | 6–8 | 9–11 | 12–14 | 15–16 | 17–18 | 19 | 20+ |
+   |---|---|---|---|---|---|---|---|---|
+   | Best used | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+
+4. **Course handicap** = index × slope ÷ 113 + (rating − par), rounded. An
+   allowance (100% down to 75%) scales it into a playing handicap.
+5. **Strokes to give** = each playing handicap minus the lowest. Strokes go on
+   stroke index 1 first. More than nine wraps round to a second stroke per hole.
+
+Rounds are replayed in date order, so editing or back-filling an old card
+re-flows every index after it. Each round keeps a copy of the course it was
+played on, so changing the rating later doesn't rewrite history unless you
+tick *Also apply to rounds already played*.
+
+Deliberate simplifications: this is a pure nine-hole index. It is never
+converted to an 18-hole World Handicap System index, and it leaves out the
+WHS small-sample adjustments (−2/−1 for 3–6 rounds), the soft/hard caps, and
+the playing-conditions adjustment. Only complete nine-hole cards count.
+
+```bash
+npm run icons:nine  # regenerate The Nine's icons
+```
+
 ## Layout
 
 ```
@@ -254,7 +316,14 @@ public/
     ui.js               rendering
     presets.js          built-in weight sets
     store.js            settings persistence
+public/nine/             The Nine — separate nine-hole handicap app (see above)
+  js/handicap.js        differentials, index, caps, strokes — all pure
+  js/store.js           the book in localStorage, import/export, demo season
+  js/app.js             pages and wiring
+  nine.css              the paper look
 tools/make-icons.mjs    generates the PNG icons with no image dependencies
+tools/make-nine-icons.mjs  The Nine's icons
+tools/png.mjs           shared PNG encoder for both
 test/                   node:test unit tests
 ```
 

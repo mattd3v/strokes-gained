@@ -69,7 +69,9 @@ function redact(urlString) {
 }
 
 async function serveStatic(req, res, pathname) {
-  const rel = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
+  // A folder URL serves that folder's index.html, so ./nine/ is its own app.
+  let rel = pathname.replace(/^\/+/, '');
+  if (rel === '' || rel.endsWith('/')) rel += 'index.html';
   const resolved = path.resolve(ROOT, rel);
   if (resolved !== ROOT && !resolved.startsWith(ROOT + path.sep)) {
     return send(res, 403, 'Forbidden');
@@ -81,7 +83,11 @@ async function serveStatic(req, res, pathname) {
     const cache = rel === 'sw.js' ? 'no-cache' : 'no-cache';
     send(res, 200, body, { 'content-type': type, 'cache-control': cache });
   } catch (err) {
-    if (err.code === 'ENOENT' || err.code === 'EISDIR') {
+    // /nine → /nine/, or the page's relative asset paths resolve one level up.
+    if (err.code === 'EISDIR') {
+      return send(res, 301, '', { location: `${pathname}/${req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''}` });
+    }
+    if (err.code === 'ENOENT') {
       // Single-page app: unknown paths fall back to the shell.
       if (!path.extname(rel)) {
         try {
