@@ -208,6 +208,16 @@ function focusHole(pid, i) {
   if (next) next.focus(); else document.activeElement?.blur();
 }
 
+/**
+ * Steps through the card the way it's filled in on the course: every player
+ * on a hole, then the next hole. That's the boxes' order on the page.
+ */
+function focusStep(from, step) {
+  const boxes = [...page.querySelectorAll('[data-hole]')];
+  const next = boxes[boxes.indexOf(from) + step];
+  if (next) next.focus(); else if (step > 0) from.blur();
+}
+
 page.addEventListener('input', (e) => {
   const t = e.target;
   if (t.matches('[data-hole]')) {
@@ -219,9 +229,9 @@ page.addEventListener('input', (e) => {
     t.closest('.cell').className = `cell ${markFor(n)}`;
     saveJson(DRAFT_KEY, draft);
     showTotals(t.dataset.player);
-    // A single 2–9, or any two digits, is a finished hole: drop to the next one.
-    // A lone 1 waits, since it might be the start of 10.
-    if (/^[2-9]$|^\d\d$/.test(clean)) focusHole(t.dataset.player, i + 1);
+    // A single 2–9, or any two digits, is a finished score: on to the next
+    // player. A lone 1 waits, since it might be the start of 10.
+    if (/^[2-9]$|^\d\d$/.test(clean)) focusStep(t, 1);
   } else if (t.id === 'card-date') {
     draft.date = t.value;
     saveJson(DRAFT_KEY, draft);
@@ -232,7 +242,11 @@ page.addEventListener('keydown', (e) => {
   const t = e.target;
   if (!t.matches('[data-hole]')) return;
   const i = Number(t.dataset.hole);
-  if (e.key === 'Enter' || e.key === 'ArrowDown') { e.preventDefault(); focusHole(t.dataset.player, i + 1); }
+  if (e.key === 'Enter') { e.preventDefault(); focusStep(t, 1); }
+  // Backspace in an empty box goes back one; that box's score is selected,
+  // so a second Backspace clears it.
+  if (e.key === 'Backspace' && t.value === '') { e.preventDefault(); focusStep(t, -1); }
+  if (e.key === 'ArrowDown') { e.preventDefault(); focusHole(t.dataset.player, i + 1); }
   if (e.key === 'ArrowUp') { e.preventDefault(); focusHole(t.dataset.player, i - 1); }
 });
 page.addEventListener('focusin', (e) => { if (e.target.matches('[data-hole]')) e.target.select(); });
