@@ -236,6 +236,53 @@ dependency-free Node is the smallest honest version of that.
 of upstream paths, forwards rate-limit headers back to the page, and never logs
 your key.
 
+## The Nine: a nine-hole handicap book
+
+`public/nine/` is a second, separate app: a scorebook for a group of friends who
+play the same nine. It keeps the rounds, works out each player's handicap, and
+tells you how many strokes everyone gets. It is also where the paper
+(yardage-book) look is being tried out: card stock, pencilled scores, red-ink stamp.
+
+```bash
+npm start           # then open http://127.0.0.1:5173/nine/
+```
+
+It needs no API key and no server of its own. `public/nine/` is plain static
+files, and it installs as its own PWA. Everything is kept in the browser's
+`localStorage`. One person keeps the book and shares it with **Rounds →
+Download**. **Import** on another phone replaces that phone's book with the file.
+
+| | |
+|---|---|
+| **Card** | Tick who played and enter their scores hole by hole. Birdies are circled and bogeys boxed (doubled for eagles and double bogey or worse). The total, score to par and differential fill in as you go, and a half-finished card survives a reload. |
+| **Strokes** | Tick who's playing. The lowest handicap plays off scratch and everyone else gets the difference. |
+| **Players** | Each index, plus the last 20 differentials with the ones that count circled. |
+| **Rounds** | Every round, editable, plus download/import. |
+
+### The handicap maths
+
+It is for one course — nine par 3s (par 27), rating 27.3, slope 87, set in `COURSE` and `PAR` in
+`public/nine/js/handicap.js`. That file is pure and covered by
+`test/nine-handicap.test.mjs`.
+
+1. **Differential** = (113 ÷ 87) × (nine-hole total − 27.3), to 0.1. Only cards with all nine holes scored count; an incomplete card is kept but ignored.
+2. **Index.** Take the most recent 20 rounds, and average the best of them:
+
+   | Eligible rounds | 1–5 | 6–8 | 9–11 | 12–14 | 15–16 | 17–18 | 19 | 20+ |
+   |---|---|---|---|---|---|---|---|---|
+   | Best used | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+
+3. **Course handicap** = index × 87 ÷ 113, rounded.
+4. **Strokes to give** = each course handicap minus the lowest in the group.
+
+Holes have no handicap rating, so there is no per-hole cap on blow-up
+holes and strokes aren't placed on particular holes. It is a pure nine-hole index,
+never converted to 18 holes, without the official small-sample adjustments.
+
+```bash
+npm run icons:nine  # regenerate The Nine's icons
+```
+
 ## Layout
 
 ```
@@ -254,7 +301,14 @@ public/
     ui.js               rendering
     presets.js          built-in weight sets
     store.js            settings persistence
+public/nine/             The Nine — separate nine-hole handicap app (see above)
+  js/handicap.js        differentials, index, strokes — all pure
+  js/store.js           the book in localStorage, import/export, demo season
+  js/app.js             pages and wiring
+  nine.css              the paper look
 tools/make-icons.mjs    generates the PNG icons with no image dependencies
+tools/make-nine-icons.mjs  The Nine's icons
+tools/png.mjs           shared PNG encoder for both
 test/                   node:test unit tests
 ```
 

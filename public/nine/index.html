@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Nine</title>
+<meta name="description" content="Nine-hole scores, handicaps, and strokes to give for a group of friends.">
+<meta name="theme-color" content="#efe7d2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1b1914" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="The Nine">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<link rel="stylesheet" href="./nine.css">
+</head>
+<body>
+
+<div class="book">
+  <header class="masthead">
+    <div class="stitch" aria-hidden="true"></div>
+    <p class="kicker">Handicap &amp; scoring book</p>
+    <div class="masthead-row">
+      <h1>The Nine</h1>
+      <div class="stamp" aria-label="Course rating, slope and par">
+        <span><b>CR</b> <span id="stamp-rating">—</span></span>
+        <span><b>SL</b> <span id="stamp-slope">—</span></span>
+        <span><b>PAR</b> <span id="stamp-par">—</span></span>
+      </div>
+    </div>
+    <p class="course-line" id="course-line"></p>
+  </header>
+
+  <main id="page" tabindex="-1"></main>
+
+  <p class="colophon">Kept in this browser. Download it from the Rounds page to share.</p>
+</div>
+
+<nav class="tabs" aria-label="Pages">
+  <a href="#card" data-tab="card"><span class="tab-no">01</span>Card</a>
+  <a href="#strokes" data-tab="strokes"><span class="tab-no">02</span>Strokes</a>
+  <a href="#players" data-tab="players"><span class="tab-no">03</span>Players</a>
+  <a href="#rounds" data-tab="rounds"><span class="tab-no">04</span>Rounds</a>
+</nav>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script type="module" src="./js/app.js"></script>
+</body>
+</html>

@@ -1,21 +1,16 @@
-// App-shell service worker. DataGolf traffic is never handled here — the app
-// caches feed payloads itself in localStorage so it can open offline with the
-// last board you looked at.
+// App-shell service worker for The Nine. Everything the app knows lives in
+// localStorage, so caching the shell is all it takes to work offline on the
+// course.
 
-const VERSION = 'sg-v2';
+const VERSION = 'nine-v4';
 const SHELL = [
   './',
   './index.html',
-  './styles.css',
+  './nine.css',
   './manifest.webmanifest',
   './js/app.js',
-  './js/api.js',
-  './js/model.js',
-  './js/scoring.js',
+  './js/handicap.js',
   './js/store.js',
-  './js/presets.js',
-  './js/ui.js',
-  './js/diagnostics.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/maskable-512.png',
@@ -33,9 +28,8 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      // Only this app's caches: The Nine (./nine/) keeps its own on the same origin.
       .then((keys) => Promise.all(
-        keys.filter((k) => k.startsWith('sg-') && k !== VERSION).map((k) => caches.delete(k)),
+        keys.filter((k) => k.startsWith('nine-') && k !== VERSION).map((k) => caches.delete(k)),
       ))
       .then(() => self.clients.claim()),
   );
@@ -44,23 +38,15 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
+  if (new URL(request.url).origin !== self.location.origin) return;
 
-  const url = new URL(request.url);
-  if (url.origin !== self.location.origin) return;
-
-  // The proxy sits next to the shell, so its prefix depends on the SW scope.
-  const scope = new URL('./', self.location).pathname;
-  if (url.pathname === `${scope}dg` || url.pathname.startsWith(`${scope}dg/`)) return;
-
-  // Stale-while-revalidate: shell loads instantly, updates land next visit.
+  // Stale-while-revalidate: opens instantly, updates land on the next visit.
   event.respondWith(
     caches.open(VERSION).then(async (cache) => {
       const cached = await cache.match(request, { ignoreSearch: true });
       const network = fetch(request)
         .then((response) => {
-          if (response && response.ok && response.type === 'basic') {
-            cache.put(request, response.clone());
-          }
+          if (response && response.ok && response.type === 'basic') cache.put(request, response.clone());
           return response;
         })
         .catch(() => null);
@@ -72,10 +58,7 @@ self.addEventListener('fetch', (event) => {
         const shell = await cache.match('./index.html');
         if (shell) return shell;
       }
-      return new Response('Offline and not cached.', {
-        status: 503,
-        headers: { 'content-type': 'text/plain' },
-      });
+      return new Response('Offline and not cached.', { status: 503, headers: { 'content-type': 'text/plain' } });
     }),
   );
 });
